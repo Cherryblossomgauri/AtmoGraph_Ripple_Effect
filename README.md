@@ -1,4 +1,5 @@
-#**AtmoGraph – Supply Chain Ripple Effect**
+<h1 align="center">🌐 ATMOGRAPH</h1>
+<h2 align="center">SUPPLY CHAIN RIPPLE EFFECT</h2>
 
 **Visualizing Global Supply Chain Disruptions Through Graph-Based Intelligence.**
 
