@@ -1,0 +1,51 @@
+industry_id,industry_name,country_id,industry_category
+IND_AGRI,Agriculture,IND,AGRI
+IND_MIN,Mining,IND,MIN
+IND_CHEM,Chemicals,IND,CHEM
+IND_SEMI,Semiconductors,IND,SEMI
+IND_ELEC,Electronics,IND,ELEC
+IND_AUTO,Automobile,IND,AUTO
+IND_TEXT,Textiles,IND,TEXT
+IND_PHAR,Pharmaceuticals,IND,PHAR
+IND_FOOD,Food Processing,IND,FOOD
+IND_LOGI,Logistics,IND,LOGI
+CHN_AGRI,Agriculture,CHN,AGRI
+CHN_MIN,Mining,CHN,MIN
+CHN_CHEM,Chemicals,CHN,CHEM
+CHN_SEMI,Semiconductors,CHN,SEMI
+CHN_ELEC,Electronics,CHN,ELEC
+CHN_AUTO,Automobile,CHN,AUTO
+CHN_TEXT,Textiles,CHN,TEXT
+CHN_PHAR,Pharmaceuticals,CHN,PHAR
+CHN_FOOD,Food Processing,CHN,FOOD
+CHN_LOGI,Logistics,CHN,LOGI
+DEU_AGRI,Agriculture,DEU,AGRI
+DEU_MIN,Mining,DEU,MIN
+DEU_CHEM,Chemicals,DEU,CHEM
+DEU_SEMI,Semiconductors,DEU,SEMI
+DEU_ELEC,Electronics,DEU,ELEC
+DEU_AUTO,Automobile,DEU,AUTO
+DEU_TEXT,Textiles,DEU,TEXT
+DEU_PHAR,Pharmaceuticals,DEU,PHAR
+DEU_FOOD,Food Processing,DEU,FOOD
+DEU_LOGI,Logistics,DEU,LOGI
+USA_AGRI,Agriculture,USA,AGRI
+USA_MIN,Mining,USA,MIN
+USA_CHEM,Chemicals,USA,CHEM
+USA_SEMI,Semiconductors,USA,SEMI
+USA_ELEC,Electronics,USA,ELEC
+USA_AUTO,Automobile,USA,AUTO
+USA_TEXT,Textiles,USA,TEXT
+USA_PHAR,Pharmaceuticals,USA,PHAR
+USA_FOOD,Food Processing,USA,FOOD
+USA_LOGI,Logistics,USA,LOGI
+JPN_AGRI,Agriculture,JPN,AGRI
+JPN_MIN,Mining,JPN,MIN
+JPN_CHEM,Chemicals,JPN,CHEM
+JPN_SEMI,Semiconductors,JPN,SEMI
+JPN_ELEC,Electronics,JPN,ELEC
+JPN_AUTO,Automobile,JPN,AUTO
+JPN_TEXT,Textiles,JPN,TEXT
+JPN_PHAR,Pharmaceuticals,JPN,PHAR
+JPN_FOOD,Food Processing,JPN,FOOD
+JPN_LOGI,Logistics,JPN,LOGI
