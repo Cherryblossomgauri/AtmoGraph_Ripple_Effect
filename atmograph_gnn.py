@@ -7,8 +7,12 @@ Schema (from Mayank's graph):
 
 Task: given ONE disruption, predict impact (0..1) on every Port, Industry, Country.
 
-Run (fake data with the SAME shape as the real graph):   python atmograph_hetero_gnn.py
-Run (real Neo4j):  set NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD, then
+Data source (picked automatically):
+  1. USE_NEO4J=1                      -> reads the live Neo4j graph
+  2. folder data/synthetic/ exists    -> reads the team's CSV files (same data Mayank loads)
+  3. otherwise                        -> fake graph with the same shape
+Run:  python atmograph_hetero_gnn.py      (from the repo root, so data/synthetic is found)
+Real Neo4j:  set NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD, then
                    USE_NEO4J=1 python atmograph_hetero_gnn.py
                    (Python driver uses bolt port 7687, NOT 7474 which is the browser)
 
@@ -30,11 +34,13 @@ N_SYNTH = 600          # synthetic training scenarios
 EPOCHS = 40
 HIDDEN = 48
 SEV_MAX = 5.0          # ASSUMPTION: severity scale 1..5 (ask Mayank)
-DUR_MAX = 90.0
+DUR_MAX = 30.0          # real disruptions last 2..28 days
 ROUTE_TO_PORT = 0.5    # share of a route disruption passed to its end ports
 SUPPLY_DAMP = 0.5      # how much of a supplier's impact passes to its buyer
 SUPPLY_ITERS = 3
 USE_NEO4J = os.getenv("USE_NEO4J") == "1"
+CSV_DIR = os.getenv("CSV_DIR", "data/synthetic")
+CAP_SCALE = 100.0      # real capacity_index / route_capacity_index are 0..100 (seen: 40..96)
 
 rng = np.random.default_rng(SEED)
 torch.manual_seed(SEED)
@@ -71,6 +77,9 @@ def fetch_raw(run):
         out[k] = [(r["a"], r["b"]) for r in raw[k]]
     for k in ("supplies", "uses_port"):
         out[k] = [(r["a"], r["b"], float(r["w"])) for r in raw[k]]
+    for k in ("port", "route"):
+        for r in out[k]:
+            r["cap"] = float(r["cap"]) / CAP_SCALE
     return out
 
 
@@ -82,6 +91,34 @@ def fetch_from_neo4j():
     with GraphDatabase.driver(uri, auth=(user, pw)) as driver:
         with driver.session() as s:
             return fetch_raw(lambda q: s.run(q).data())
+
+
+def load_from_csv(folder):
+    import csv
+
+    def rd(name):
+        with open(os.path.join(folder, name), newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+
+    countries, industries, ports = rd("countries.csv"), rd("industries.csv"), rd("ports.csv")
+    routes, disr = rd("shipping_routes.csv"), rd("disruptions.csv")
+    tx, links = rd("transactions.csv"), rd("industry_port_links.csv")
+    return {
+        "country": [{"id": r["country_id"], "region": r["region"]} for r in countries],
+        "industry": [{"id": r["industry_id"], "category": r["industry_category"]} for r in industries],
+        "port": [{"id": r["port_id"], "cap": float(r["capacity_index"]) / CAP_SCALE} for r in ports],
+        "route": [{"id": r["route_id"], "transit_days": int(r["transit_days"]),
+                   "cap": float(r["route_capacity_index"]) / CAP_SCALE} for r in routes],
+        "disruption": [{"id": r["disruption_id"], "event_type": r["event_type"], "severity": int(r["severity"]),
+                        "duration_days": int(r["duration_days"])} for r in disr],
+        "has_industry": [(r["country_id"], r["industry_id"]) for r in industries],
+        "located_in": [(r["port_id"], r["country_id"]) for r in ports],
+        "from_port": [(r["route_id"], r["source_port_id"]) for r in routes],
+        "to_port": [(r["route_id"], r["destination_port_id"]) for r in routes],
+        "uses_port": [(r["industry_id"], r["port_id"], float(r["share"])) for r in links],
+        "supplies": [(r["supplier_industry_id"], r["buyer_industry_id"], float(r["dependency_strength"])) for r in tx],
+        "affects": [(r["disruption_id"], r["target_id"]) for r in disr],
+    }
 
 
 def make_mock_raw():
@@ -300,10 +337,32 @@ def row(name, r):
     return f"{name:<26}{r['port']:>8.4f}{r['industry']:>10.4f}{r['country']:>9.4f}{r['top5']:>8.2f}"
 
 
+def demo(model, S, raw, scen, disruption_id):
+    """Show what the dashboard would receive for one real disruption: GNN vs rule."""
+    i = [d["id"] for d in raw["disruption"]].index(disruption_id)
+    d = raw["disruption"][i]
+    sc = scen[i]
+    with torch.no_grad():
+        pred = model(next(iter(DataLoader([sc], batch_size=1))))
+    print(f"\nDEMO {disruption_id}: {d['event_type']} severity {d['severity']} for {d['duration_days']} days"
+          f" -> target {[b for a, b in raw['affects'] if a == disruption_id]}")
+    print(f"{'country':<8}{'rule':>8}{'GNN':>8}")
+    for c, r in enumerate(raw["country"]):
+        print(f"{r['id']:<8}{sc['country'].y[c]:>8.3f}{pred['country'][c]:>8.3f}")
+    top = pred["industry"].topk(5).indices.tolist()
+    print("top-5 industries by GNN (rule value in brackets):",
+          ", ".join(f"{raw['industry'][j]['id']} {pred['industry'][j]:.2f} [{sc['industry'].y[j]:.2f}]" for j in top))
+
+
 if __name__ == "__main__":
-    raw = fetch_from_neo4j() if USE_NEO4J else make_mock_raw()
+    if USE_NEO4J:
+        raw, src = fetch_from_neo4j(), "Neo4j"
+    elif os.path.isdir(CSV_DIR):
+        raw, src = load_from_csv(CSV_DIR), f"CSV files in {CSV_DIR}"
+    else:
+        raw, src = make_mock_raw(), "MOCK (same counts/fields as real)"
     S = build_static(raw)
-    print("source:", "Neo4j" if USE_NEO4J else "MOCK (same counts/fields as real)", "| nodes:", S["n"])
+    print("source:", src, "| nodes:", S["n"], "| disruptions:", len(raw["disruption"]))
 
     train = [random_scenario(S) for _ in range(N_SYNTH)]
     val = [random_scenario(S) for _ in range(100)]
@@ -328,4 +387,7 @@ if __name__ == "__main__":
         print(row("Per-node average", evaluate(avg, l)))
         for L, m in models.items():
             print(row(f"GNN {L}-layer", evaluate(m, l)))
+    if len(real) == len(raw["disruption"]) and raw["disruption"]:
+        did = raw["disruption"][min(1, len(real) - 1)]["id"]
+        demo(models[5], S, raw, real, did)
     torch.save(models[5].state_dict(), "atmograph_hetero_gnn.pt")
