@@ -1,170 +1,331 @@
+"""
+AtmoGraph - heterogeneous GNN matched to the Neo4j schema
 
+Schema (from Mayank's graph):
+  Nodes: Country(5) Industry(50) Port(5) ShippingRoute(8) Disruption(10)
+  Edges: HAS_INDUSTRY, SUPPLIES, USES_PORT, LOCATED_IN, FROM_PORT, TO_PORT, AFFECTS
+
+Task: given ONE disruption, predict impact (0..1) on every Port, Industry, Country.
+
+Run (fake data with the SAME shape as the real graph):   python atmograph_hetero_gnn.py
+Run (real Neo4j):  set NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD, then
+                   USE_NEO4J=1 python atmograph_hetero_gnn.py
+                   (Python driver uses bolt port 7687, NOT 7474 which is the browser)
+
+IMPORTANT: the real graph has NO impact labels. Labels here come from the
+simulate() rule below, so this is a SURROGATE of a rule, not a predictor of
+real disruptions. Rule constants are ASSUMPTIONS - agree them with the team.
+"""
+import os
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.data import Data
+from torch_geometric.data import HeteroData
 from torch_geometric.loader import DataLoader
-from torch_geometric.nn import GraphConv
+from torch_geometric.nn import HeteroConv, GraphConv
 
 SEED = 42
-TIERS = (20, 30, 30, 20)  # raw suppliers -> manufacturers -> distributors -> retailers
-N_SCENARIOS = 800
-EPOCHS = 80
-HIDDEN = 64
+N_SYNTH = 600          # synthetic training scenarios
+EPOCHS = 40
+HIDDEN = 48
+SEV_MAX = 5.0          # ASSUMPTION: severity scale 1..5 (ask Mayank)
+DUR_MAX = 90.0
+ROUTE_TO_PORT = 0.5    # share of a route disruption passed to its end ports
+SUPPLY_DAMP = 0.5      # how much of a supplier's impact passes to its buyer
+SUPPLY_ITERS = 3
+USE_NEO4J = os.getenv("USE_NEO4J") == "1"
 
 rng = np.random.default_rng(SEED)
 torch.manual_seed(SEED)
 
+# ----------------------------------------------------------------------
+# 1. Raw graph: from Neo4j, or a mock with identical counts and fields
+# ----------------------------------------------------------------------
+# Undirected patterns are used where direction doesn't matter (roles come
+# from the labels), so a wrongly-read arrow can't break the loader.
+# Only SUPPLIES is directional: (a)-[:SUPPLIES]->(b) means "a supplies b".
+QUERIES = {
+    "country": "MATCH (c:Country) RETURN c.country_id AS id, c.region AS region",
+    "industry": "MATCH (i:Industry) RETURN i.industry_id AS id, i.industry_category AS category",
+    "port": "MATCH (p:Port) RETURN p.port_id AS id, p.capacity_index AS cap",
+    "route": "MATCH (r:ShippingRoute) RETURN r.route_id AS id, r.transit_days AS transit_days, r.route_capacity_index AS cap",
+    "disruption": "MATCH (d:Disruption) RETURN d.disruption_id AS id, d.event_type AS event_type, d.severity AS severity, d.duration_days AS duration_days",
+    "has_industry": "MATCH (c:Country)-[:HAS_INDUSTRY]-(i:Industry) RETURN c.country_id AS a, i.industry_id AS b",
+    "supplies": "MATCH (a:Industry)-[s:SUPPLIES]->(b:Industry) RETURN a.industry_id AS a, b.industry_id AS b, s.dependency_strength AS w",
+    "uses_port": "MATCH (i:Industry)-[u:USES_PORT]-(p:Port) RETURN i.industry_id AS a, p.port_id AS b, u.share AS w",
+    "located_in": "MATCH (p:Port)-[:LOCATED_IN]-(c:Country) RETURN p.port_id AS a, c.country_id AS b",
+    "from_port": "MATCH (r:ShippingRoute)-[:FROM_PORT]-(p:Port) RETURN r.route_id AS a, p.port_id AS b",
+    "to_port": "MATCH (r:ShippingRoute)-[:TO_PORT]-(p:Port) RETURN r.route_id AS a, p.port_id AS b",
+    "affects": "MATCH (d:Disruption)-[:AFFECTS]-(t) WHERE t:Port OR t:ShippingRoute RETURN d.disruption_id AS a, coalesce(t.port_id, t.route_id) AS b",
+}
+
+
+def fetch_raw(run):
+    """run(query) -> list of dict rows. Returns the raw graph as python lists."""
+    raw = {k: run(q) for k, q in QUERIES.items()}
+    out = {}
+    for k in ("country", "industry", "port", "route", "disruption"):
+        out[k] = raw[k]
+    for k in ("has_industry", "located_in", "from_port", "to_port", "affects"):
+        out[k] = [(r["a"], r["b"]) for r in raw[k]]
+    for k in ("supplies", "uses_port"):
+        out[k] = [(r["a"], r["b"], float(r["w"])) for r in raw[k]]
+    return out
+
+
+def fetch_from_neo4j():
+    from neo4j import GraphDatabase  # pip install neo4j
+    uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    user = os.getenv("NEO4J_USER", "neo4j")
+    pw = os.environ["NEO4J_PASSWORD"]  # never hard-code or commit this
+    with GraphDatabase.driver(uri, auth=(user, pw)) as driver:
+        with driver.session() as s:
+            return fetch_raw(lambda q: s.run(q).data())
+
+
+def make_mock_raw():
+    cats = ["Electronics", "Auto", "Pharma", "Food", "Energy", "Textile"]
+    types = ["storm", "strike", "congestion", "flood"]
+    raw = {
+        "country": [{"id": f"C{i}", "region": ["Asia", "Europe", "Americas"][i % 3]} for i in range(5)],
+        "industry": [{"id": f"I{i}", "category": cats[i % 6]} for i in range(50)],
+        "port": [{"id": f"P{i}", "cap": float(rng.uniform(0.3, 1))} for i in range(5)],
+        "route": [{"id": f"R{i}", "transit_days": int(rng.integers(3, 30)), "cap": float(rng.uniform(0.3, 1))} for i in range(8)],
+        "disruption": [{"id": f"D{i}", "event_type": types[i % 4], "severity": int(rng.integers(1, 6)),
+                        "duration_days": int(rng.integers(2, 60))} for i in range(10)],
+    }
+    raw["has_industry"] = [(f"C{i % 5}", f"I{i}") for i in range(50)]
+    raw["uses_port"] = [(f"I{i}", f"P{rng.integers(0, 5)}", float(rng.uniform(0.5, 1))) for i in range(50)]
+    raw["located_in"] = [(f"P{i}", f"C{i}") for i in range(5)]
+    pairs = set()
+    while len(pairs) < 50:
+        a, b = rng.integers(0, 50, 2)
+        if a != b:
+            pairs.add((int(a), int(b)))
+    raw["supplies"] = [(f"I{a}", f"I{b}", float(rng.uniform(0.2, 1))) for a, b in sorted(pairs)]
+    ends = [rng.choice(5, 2, replace=False) for _ in range(8)]
+    raw["from_port"] = [(f"R{i}", f"P{e[0]}") for i, e in enumerate(ends)]
+    raw["to_port"] = [(f"R{i}", f"P{e[1]}") for i, e in enumerate(ends)]
+    raw["affects"] = [(f"D{i}", f"P{i % 5}" if i < 6 else f"R{i - 6}") for i in range(10)]
+    return raw
+
 
 # ----------------------------------------------------------------------
-# 1. Graph (replace with Neo4j export later)
+# 2. Static graph tensors (shared by every scenario)
 # ----------------------------------------------------------------------
-def build_graph():
-    tier = np.concatenate([[t] * n for t, n in enumerate(TIERS)])
-    N = len(tier)
-    dep = np.zeros((N, N))  # dep[v, u] = how much customer v depends on supplier u
-    for t in range(len(TIERS) - 1):
-        suppliers = np.where(tier == t)[0]
-        customers = np.where(tier == t + 1)[0]
-        for v in customers:
-            k = rng.integers(1, 4)
-            for u in rng.choice(suppliers, size=min(k, len(suppliers)), replace=False):
-                dep[v, u] = rng.uniform(0.3, 1.0)
-    row_sum = dep.sum(1, keepdims=True)
-    dep = np.divide(dep, row_sum, out=np.zeros_like(dep), where=row_sum > 0)
-
-    buffer = rng.uniform(0.0, 0.7, N)       # inventory buffer: absorbs shocks
-    capacity = rng.uniform(0.2, 1.0, N)
-    region_risk = rng.uniform(0.0, 1.0, N)  # the "Atmo" part: weather/atmospheric exposure
-    return tier, dep, buffer, capacity, region_risk
+def onehot(values, vocab):
+    m = np.zeros((len(values), len(vocab)), dtype=np.float32)
+    for i, v in enumerate(values):
+        m[i, vocab.index(v)] = 1
+    return m
 
 
-tier, dep, buffer, capacity, region_risk = build_graph()
-N = len(tier)
-dst, src = np.nonzero(dep)  # edge u -> v  (supplier -> customer)
-edge_index = torch.tensor(np.stack([src, dst]), dtype=torch.long)
-edge_weight = torch.tensor(dep[dst, src], dtype=torch.float)
-tier_onehot = np.eye(len(TIERS))[tier]
+def build_static(raw):
+    ids = {k: {r["id"]: i for i, r in enumerate(raw[k])} for k in ("country", "industry", "port", "route")}
+    nI, nP, nR, nC = (len(raw[k]) for k in ("industry", "port", "route", "country"))
+    regions = sorted({r["region"] for r in raw["country"]})
+    cats = sorted({r["category"] for r in raw["industry"]})
+    etypes = sorted({d["event_type"] for d in raw["disruption"]})
+    x = {
+        "country": onehot([r["region"] for r in raw["country"]], regions),
+        "industry": onehot([r["category"] for r in raw["industry"]], cats),
+        "port": np.array([[r["cap"]] for r in raw["port"]], dtype=np.float32),
+        "route": np.array([[r["transit_days"] / 30.0, r["cap"]] for r in raw["route"]], dtype=np.float32),
+    }
+    # (src_type, rel, dst_type): (pairs, src_map, dst_map)
+    spec = {
+        ("country", "has_industry", "industry"): (raw["has_industry"], ids["country"], ids["industry"]),
+        ("industry", "supplies", "industry"): (raw["supplies"], ids["industry"], ids["industry"]),
+        ("industry", "uses_port", "port"): (raw["uses_port"], ids["industry"], ids["port"]),
+        ("port", "located_in", "country"): (raw["located_in"], ids["port"], ids["country"]),
+        ("route", "from_port", "port"): (raw["from_port"], ids["route"], ids["port"]),
+        ("route", "to_port", "port"): (raw["to_port"], ids["route"], ids["port"]),
+    }
+    edges = {}
+    for et, (pairs, sm, dm) in spec.items():
+        src = [sm[p[0]] for p in pairs]
+        dst = [dm[p[1]] for p in pairs]
+        w = [float(p[2]) if len(p) > 2 else 1.0 for p in pairs]
+        edges[et] = (src, dst, w)
 
-
-# ----------------------------------------------------------------------
-# 2. Ripple simulator = ground-truth labels
-#    WARNING: labels come from a rule I wrote. A GNN matching it proves the
-#    pipeline works, NOT that it predicts real supply chains. Real labels
-#    (historical disruptions) are what make this project meaningful.
-# ----------------------------------------------------------------------
-def simulate(shock, hops=len(TIERS) - 1):
-    impact = shock.copy()
-    for _ in range(hops):
-        impact = np.clip(shock + (1 - buffer) * (dep @ impact), 0, 1)
-    return impact
-
-
-def make_scenario():
-    shock = np.zeros(N)
-    candidates = np.where(tier <= 1)[0]
-    hit = rng.choice(candidates, size=rng.integers(1, 4), replace=False)
-    shock[hit] = rng.uniform(0.5, 1.0, len(hit)) * (0.5 + 0.5 * region_risk[hit])
-    y = simulate(shock)
-    static = np.column_stack([tier_onehot, buffer, capacity, region_risk])
-    x = np.column_stack([static, shock])
-    return Data(
-        x=torch.tensor(x, dtype=torch.float),
-        y=torch.tensor(y, dtype=torch.float),
-        edge_index=edge_index,
-        edge_weight=edge_weight,
-    )
-
-
-dataset = [make_scenario() for _ in range(N_SCENARIOS)]
-n_tr, n_va = int(0.7 * N_SCENARIOS), int(0.15 * N_SCENARIOS)
-train, val, test = dataset[:n_tr], dataset[n_tr:n_tr + n_va], dataset[n_tr + n_va:]
-train_loader = DataLoader(train, batch_size=32, shuffle=True)
-val_loader = DataLoader(val, batch_size=64)
-test_loader = DataLoader(test, batch_size=64)
-in_dim = dataset[0].x.shape[1]
+    # dense matrices for the simulator
+    U = np.zeros((nI, nP)); A = np.zeros((nI, nI)); C = np.zeros((nC, nI)); R2P = np.zeros((nP, nR))
+    for s, d, w in zip(*edges[("industry", "uses_port", "port")]): U[s, d] += w
+    for s, d, w in zip(*edges[("industry", "supplies", "industry")]): A[d, s] += w  # buyer d exposed to supplier s
+    for s, d, w in zip(*edges[("country", "has_industry", "industry")]): C[s, d] = 1
+    C = C / np.maximum(C.sum(1, keepdims=True), 1)
+    for k in ("from_port", "to_port"):
+        for s, d, w in zip(*edges[("route", k, "port")]): R2P[d, s] = 1
+    return dict(ids=ids, x=x, edges=edges, U=U, A=A, C=C, R2P=R2P, etypes=etypes,
+                cap_port=x["port"][:, 0], cap_route=x["route"][:, 1], n=dict(I=nI, P=nP, R=nR, C=nC))
 
 
 # ----------------------------------------------------------------------
-# 3. Models
+# 3. Scenario simulator = labels (ASSUMED RULE, not real data)
 # ----------------------------------------------------------------------
-class GNN(nn.Module):
-    """num_layers = how many hops of ripple the model can 'see'."""
+def simulate(S, sev, dur, targets):
+    mag = (sev / SEV_MAX) * (0.5 + 0.5 * min(dur, DUR_MAX) / DUR_MAX)
+    port = np.zeros(S["n"]["P"]); route = np.zeros(S["n"]["R"])
+    for kind, t in targets:
+        if kind == "port":
+            port[t] = max(port[t], mag * (1 - 0.3 * S["cap_port"][t]))
+        else:
+            route[t] = max(route[t], mag * (1 - 0.3 * S["cap_route"][t]))
+    port = np.clip(port + ROUTE_TO_PORT * (S["R2P"] @ route), 0, 1)
+    ind0 = np.clip(S["U"] @ port, 0, 1)
+    ind = ind0.copy()
+    for _ in range(SUPPLY_ITERS):
+        ind = np.clip(ind0 + SUPPLY_DAMP * (S["A"] @ ind), 0, 1)
+    return dict(port=port, industry=ind, country=S["C"] @ ind)
 
-    def __init__(self, num_layers=3):
+
+def make_scenario(S, d, targets):
+    """d: dict(event_type, severity, duration_days); targets: [('port'|'route', idx)]"""
+    y = simulate(S, d["severity"], d["duration_days"], targets)
+    data = HeteroData()
+    for nt, arr in S["x"].items():
+        data[nt].x = torch.tensor(arr)
+    dv = np.concatenate([[d["severity"] / SEV_MAX, d["duration_days"] / DUR_MAX],
+                         onehot([d["event_type"]], S["etypes"])[0]]).astype(np.float32)
+    data["disruption"].x = torch.tensor(dv).view(1, -1)
+    for (s_t, rel, d_t), (src, dst, w) in S["edges"].items():
+        ei = torch.tensor([src, dst], dtype=torch.long); wt = torch.tensor(w, dtype=torch.float)
+        data[(s_t, rel, d_t)].edge_index, data[(s_t, rel, d_t)].edge_weight = ei, wt
+        data[(d_t, "rev_" + rel, s_t)].edge_index, data[(d_t, "rev_" + rel, s_t)].edge_weight = ei.flip(0), wt
+    for kind in ("port", "route"):  # always both, so every scenario has the same edge types
+        idx = [t for k, t in targets if k == kind]
+        ei = torch.tensor([[0] * len(idx), idx], dtype=torch.long).view(2, -1)
+        wt = torch.ones(len(idx))
+        data[("disruption", "affects", kind)].edge_index = ei
+        data[("disruption", "affects", kind)].edge_weight = wt
+        data[(kind, "rev_affects", "disruption")].edge_index = ei.flip(0)
+        data[(kind, "rev_affects", "disruption")].edge_weight = wt
+    for nt, arr in y.items():
+        data[nt].y = torch.tensor(arr, dtype=torch.float)
+    return data
+
+
+def random_scenario(S, held_out=False):
+    kind = "port" if rng.random() < 0.55 else "route"
+    n = S["n"]["P"] if kind == "port" else S["n"]["R"]
+    # held-out targets: last port and last route are never used for training
+    t = int(rng.integers(0, n - 1)) if not held_out else n - 1
+    d = dict(event_type=str(rng.choice(S["etypes"])), severity=int(rng.integers(1, int(SEV_MAX) + 1)),
+             duration_days=int(rng.integers(2, int(DUR_MAX))))
+    return make_scenario(S, d, [(kind, t)])
+
+
+def real_scenarios(S, raw):
+    out = []
+    for d in raw["disruption"]:
+        targets = []
+        for a, b in raw["affects"]:
+            if a == d["id"]:
+                if b in S["ids"]["port"]: targets.append(("port", S["ids"]["port"][b]))
+                elif b in S["ids"]["route"]: targets.append(("route", S["ids"]["route"][b]))
+        if targets:
+            out.append(make_scenario(S, d, targets))
+    return out
+
+
+# ----------------------------------------------------------------------
+# 4. Model
+# ----------------------------------------------------------------------
+class HeteroGNN(nn.Module):
+    """layers = number of hops the model can see. The country-level ripple
+    needs ~5 hops: disruption->route->port->industry->industry->country."""
+
+    def __init__(self, sample, layers):
         super().__init__()
-        dims = [in_dim] + [HIDDEN] * num_layers
+        self.enc = nn.ModuleDict({nt: nn.Linear(sample[nt].x.shape[1], HIDDEN) for nt in sample.node_types})
         self.convs = nn.ModuleList(
-            GraphConv(dims[i], dims[i + 1], aggr="add") for i in range(num_layers)
-        )
-        self.out = nn.Linear(HIDDEN, 1)
+            HeteroConv({et: GraphConv(HIDDEN, HIDDEN, aggr="mean") for et in sample.edge_types}, aggr="sum")
+            for _ in range(layers))
+        self.heads = nn.ModuleDict({nt: nn.Linear(HIDDEN, 1) for nt in ("port", "industry", "country")})
 
-    def forward(self, d):
-        h = d.x
+    def forward(self, b):
+        h = {nt: F.relu(self.enc[nt](x)) for nt, x in b.x_dict.items()}
+        ew = {et: b[et].edge_weight for et in b.edge_types}
         for conv in self.convs:
-            h = F.relu(conv(h, d.edge_index, d.edge_weight))
-        return torch.sigmoid(self.out(h)).squeeze(-1)
+            out = conv(h, b.edge_index_dict, edge_weight_dict=ew)
+            h = {nt: h[nt] + F.relu(out[nt]) for nt in h}  # residual keeps deep stacks trainable
+        out = {nt: self.heads[nt](h[nt]).squeeze(-1) for nt in self.heads}
+        # linear head while training (sigmoid saturated and got stuck at 0); clamp to 0..1 when predicting
+        return out if self.training else {nt: v.clamp(0, 1) for nt, v in out.items()}
 
 
-class MLP(nn.Module):
-    """Baseline with NO graph: each node only sees its own features."""
-
-    def __init__(self):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, HIDDEN), nn.ReLU(),
-            nn.Linear(HIDDEN, HIDDEN), nn.ReLU(),
-            nn.Linear(HIDDEN, 1), nn.Sigmoid(),
-        )
-
-    def forward(self, d):
-        return self.net(d.x).squeeze(-1)
+TYPES = ("port", "industry", "country")
 
 
-# ----------------------------------------------------------------------
-# 4. Train / evaluate
-# ----------------------------------------------------------------------
 @torch.no_grad()
-def evaluate(model, loader):
-    model.eval()
-    abs_all, abs_ripple = [], []
-    for d in loader:
-        err = (model(d) - d.y).abs()
-        abs_all.append(err)
-        abs_ripple.append(err[d.x[:, -1] == 0])  # only nodes NOT directly shocked
-    return torch.cat(abs_all).mean().item(), torch.cat(abs_ripple).mean().item()
+def evaluate(predict, loader):
+    errs = {t: [] for t in TYPES}; hits = []
+    for b in loader:
+        pred = predict(b)
+        for t in TYPES:
+            errs[t].append((pred[t] - b[t].y).abs())
+        B = b["disruption"].x.shape[0]
+        p, y = pred["industry"].view(B, -1), b["industry"].y.view(B, -1)
+        for i in range(B):  # did it find the most-affected industries?
+            k = min(5, int((y[i] > 0.01).sum()))
+            if k:
+                hits.append(len(set(p[i].topk(k).indices.tolist()) & set(y[i].topk(k).indices.tolist())) / k)
+    res = {t: torch.cat(errs[t]).mean().item() for t in TYPES}
+    res["top5"] = float(np.mean(hits)) if hits else float("nan")
+    return res
 
 
-def fit(model, name):
-    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
-    best_val, best_state = 1e9, None
-    for epoch in range(EPOCHS):
+def fit(layers, train_loader, val_loader, sample):
+    model = HeteroGNN(sample, layers)
+    opt = torch.optim.Adam(model.parameters(), lr=2e-3)
+    best, state = 1e9, None
+    for _ in range(EPOCHS):
         model.train()
-        for d in train_loader:
+        for b in train_loader:
             opt.zero_grad()
-            F.mse_loss(model(d), d.y).backward()
-            opt.step()
-        v_all, v_rip = evaluate(model, val_loader)
-        if v_rip < best_val:  # select on ripple error, the metric that matters
-            best_val = v_rip
-            best_state = {k: t.clone() for k, t in model.state_dict().items()}
-    model.load_state_dict(best_state)
-    t_all, t_rip = evaluate(model, test_loader)
-    print(f"{name:<28} test MAE all={t_all:.4f}   ripple-only={t_rip:.4f}")
+            out = model(b)
+            loss = sum(F.mse_loss(out[t], b[t].y) for t in TYPES)
+            loss.backward(); opt.step()
+        model.eval()
+        v = evaluate(model, val_loader)
+        score = v["port"] + v["industry"] + v["country"]
+        if score < best:
+            best, state = score, {k: t.clone() for k, t in model.state_dict().items()}
+    model.load_state_dict(state); model.eval()
     return model
 
 
+def row(name, r):
+    return f"{name:<26}{r['port']:>8.4f}{r['industry']:>10.4f}{r['country']:>9.4f}{r['top5']:>8.2f}"
+
+
 if __name__ == "__main__":
-    # Naive baseline: predict impact = own shock (assumes NO ripple at all)
-    naive = [(d.x[:, -1] - d.y).abs() for d in test_loader.dataset]
-    naive_all = torch.cat(naive).mean().item()
-    naive_rip = torch.cat([e[d.x[:, -1] == 0] for e, d in zip(naive, test_loader.dataset)]).mean().item()
-    print(f"{'Naive (impact = shock)':<28} test MAE all={naive_all:.4f}   ripple-only={naive_rip:.4f}")
+    raw = fetch_from_neo4j() if USE_NEO4J else make_mock_raw()
+    S = build_static(raw)
+    print("source:", "Neo4j" if USE_NEO4J else "MOCK (same counts/fields as real)", "| nodes:", S["n"])
 
-    fit(MLP(), "MLP (no graph)")
-    fit(GNN(num_layers=1), "GNN 1-layer (1 hop)")
-    model = fit(GNN(num_layers=3), "GNN 3-layer (3 hops)")
+    train = [random_scenario(S) for _ in range(N_SYNTH)]
+    val = [random_scenario(S) for _ in range(100)]
+    test = [random_scenario(S) for _ in range(150)]
+    unseen = [random_scenario(S, held_out=True) for _ in range(100)]
+    real = real_scenarios(S, raw)
+    mk = lambda ds, sh=False: DataLoader(ds, batch_size=64, shuffle=sh)
+    tl, vl = mk(train, True), mk(val)
 
-    torch.save(model.state_dict(), "atmograph_gnn.pt")
-    print("saved atmograph_gnn.pt")
+    # baselines that ignore the disruption
+    mean_y = {t: torch.stack([d[t].y for d in train]).mean(0) for t in TYPES}
+    zero = lambda b: {t: torch.zeros_like(b[t].y) for t in TYPES}
+    avg = lambda b: {t: mean_y[t].repeat(b["disruption"].x.shape[0]) for t in TYPES}
+
+    models = {L: fit(L, tl, vl, train[0]) for L in (1, 3, 5)}
+    for title, ds in (("TEST: random scenarios", test), ("TEST: unseen port/route targets", unseen),
+                      ("TEST: the 10 real disruption rows (rule labels)", real)):
+        if not ds: continue
+        print(f"\n{title}\n{'model':<26}{'port':>8}{'industry':>10}{'country':>9}{'top5':>8}   (MAE, lower=better; top5 higher=better)")
+        l = mk(ds)
+        print(row("Predict zero (no ripple)", evaluate(zero, l)))
+        print(row("Per-node average", evaluate(avg, l)))
+        for L, m in models.items():
+            print(row(f"GNN {L}-layer", evaluate(m, l)))
+    torch.save(models[5].state_dict(), "atmograph_hetero_gnn.pt")
