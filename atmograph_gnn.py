@@ -153,8 +153,10 @@ def make_mock_raw():
 # ----------------------------------------------------------------------
 def onehot(values, vocab):
     m = np.zeros((len(values), len(vocab)), dtype=np.float32)
+    # PERF: build the lookup dict once, so each value is O(1) instead of vocab.index() scanning the list
+    pos = {v: j for j, v in enumerate(vocab)}
     for i, v in enumerate(values):
-        m[i, vocab.index(v)] = 1
+        m[i, pos[v]] = 1  # same result as before, just faster lookup
     return m
 
 
@@ -255,12 +257,17 @@ def random_scenario(S, held_out=False):
 
 def real_scenarios(S, raw):
     out = []
+    # PERF: group AFFECTS edges by disruption in ONE pass,
+    # instead of re-scanning the full edge list for every disruption
+    by_disruption = {}
+    for a, b in raw["affects"]:
+        by_disruption.setdefault(a, []).append(b)
     for d in raw["disruption"]:
         targets = []
-        for a, b in raw["affects"]:
-            if a == d["id"]:
-                if b in S["ids"]["port"]: targets.append(("port", S["ids"]["port"][b]))
-                elif b in S["ids"]["route"]: targets.append(("route", S["ids"]["route"][b]))
+        # lookup is O(1) now; target order is the same as before
+        for b in by_disruption.get(d["id"], []):
+            if b in S["ids"]["port"]: targets.append(("port", S["ids"]["port"][b]))
+            elif b in S["ids"]["route"]: targets.append(("route", S["ids"]["route"][b]))
         if targets:
             out.append(make_scenario(S, d, targets))
     return out
@@ -320,7 +327,7 @@ def fit(layers, train_loader, val_loader, sample):
     for _ in range(EPOCHS):
         model.train()
         for b in train_loader:
-            opt.zero_grad()
+            opt.zero_grad(set_to_none=True)  # PERF: frees old gradients instead of writing zeros each step
             out = model(b)
             loss = sum(F.mse_loss(out[t], b[t].y) for t in TYPES)
             loss.backward(); opt.step()
