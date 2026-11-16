@@ -1,6 +1,0 @@
-port_id,port_name,country_id,capacity_index,is_synthetic
-PORT_IND_01,Synthetic India Port,IND,60,true
-PORT_CHN_01,Synthetic China Port,CHN,67,true
-PORT_DEU_01,Synthetic Germany Port,DEU,94,true
-PORT_USA_01,Synthetic United States Port,USA,77,true
-PORT_JPN_01,Synthetic Japan Port,JPN,81,true
