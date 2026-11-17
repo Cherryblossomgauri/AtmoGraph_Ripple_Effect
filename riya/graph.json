@@ -1,0 +1,83 @@
+{
+  "nodes": [
+    {
+      "id": "Australia",
+      "type": "country"
+    },
+    {
+      "id": "China",
+      "type": "country"
+    },
+    {
+      "id": "Foxconn",
+      "type": "company"
+    },
+    {
+      "id": "Germany",
+      "type": "country"
+    },
+    {
+      "id": "India",
+      "type": "country"
+    },
+    {
+      "id": "Japan",
+      "type": "country"
+    },
+    {
+      "id": "Samsung",
+      "type": "company"
+    },
+    {
+      "id": "United States",
+      "type": "country"
+    }
+  ],
+  "links": [
+    {
+      "source": "China",
+      "target": "Germany",
+      "weight": 1
+    },
+    {
+      "source": "China",
+      "target": "Australia",
+      "weight": 1
+    },
+    {
+      "source": "China",
+      "target": "United States",
+      "weight": 1
+    },
+    {
+      "source": "Japan",
+      "target": "Germany",
+      "weight": 1
+    },
+    {
+      "source": "Japan",
+      "target": "China",
+      "weight": 1
+    },
+    {
+      "source": "China",
+      "target": "India",
+      "weight": 1
+    },
+    {
+      "source": "Australia",
+      "target": "Japan",
+      "weight": 1
+    },
+    {
+      "source": "Foxconn",
+      "target": "United States",
+      "weight": 1
+    },
+    {
+      "source": "Samsung",
+      "target": "Germany",
+      "weight": 1
+    }
+  ]
+}
