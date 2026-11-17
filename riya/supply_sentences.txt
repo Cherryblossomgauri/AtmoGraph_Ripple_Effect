@@ -1,0 +1,13 @@
+China supplies electronics to Germany and Australia.
+China ships machinery to India.
+China exports textiles to the United States.
+Japan supplies cars to Germany.
+Japan exports semiconductors to China.
+Germany supplies machines to India.
+India imports steel from China.
+India imports coal from Australia.
+Australia exports iron ore to Japan.
+Foxconn ships iPhones to the United States.
+Foxconn ships laptops to India.
+Samsung supplies memory chips to Germany.
+Samsung ships phones to the United States.
