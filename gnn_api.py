@@ -42,3 +42,42 @@ class PredictRequest(BaseModel):
 
 
 router = APIRouter(prefix="/gnn", tags=["GNN"])
+
+
+@router.get("/options")
+def options():
+    """What values the frontend is allowed to send."""
+    p = get_predictor()
+    return {
+        "event_types": p.S["etypes"],
+        "ports": list(p.S["ids"]["port"].keys()),
+        "routes": list(p.S["ids"]["route"].keys()),
+        "severity_range": [1, 5],
+        "duration_days_range": [1, 60],
+    }
+
+
+@router.post("/predict")
+def predict(req: PredictRequest):
+    try:
+        out = get_predictor().predict(req.event_type, req.severity, req.duration_days, req.target_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    top = sorted(out["industry_impact"].items(), key=lambda kv: kv[1], reverse=True)[:5]
+    out["top_industries"] = [{"id": k, "impact": v} for k, v in top]
+    return out
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    preload()  # load the model once, when the server starts
+    yield
+
+
+app = FastAPI(title="AtmoGraph GNN API", lifespan=lifespan)
+app.include_router(router)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
