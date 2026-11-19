@@ -398,3 +398,6 @@ if __name__ == "__main__":
         did = raw["disruption"][min(1, len(real) - 1)]["id"]
         demo(models[5], S, raw, real, did)
     torch.save(models[5].state_dict(), "atmograph_hetero_gnn.pt")
+
+if __name__ != "__main__":
+    from gnn_api import app  # lets "uvicorn atmograph_gnn:app --reload" work
