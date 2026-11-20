@@ -11,9 +11,9 @@ Data source (picked automatically):
   1. USE_NEO4J=1                      -> reads the live Neo4j graph
   2. folder data/synthetic/ exists    -> reads the team's CSV files (same data Mayank loads)
   3. otherwise                        -> fake graph with the same shape
-Run:  python atmograph_hetero_gnn.py      (from the repo root, so data/synthetic is found)
+Run:  python atmograph_gnn.py      (from the repo root, so data/synthetic is found)
 Real Neo4j:  set NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD, then
-                   USE_NEO4J=1 python atmograph_hetero_gnn.py
+                   USE_NEO4J=1 python atmograph_gnn.py
                    (Python driver uses bolt port 7687, NOT 7474 which is the browser)
 
 IMPORTANT: the real graph has NO impact labels. Labels here come from the
@@ -40,6 +40,7 @@ SUPPLY_DAMP = 0.5      # how much of a supplier's impact passes to its buyer
 SUPPLY_ITERS = 3
 USE_NEO4J = os.getenv("USE_NEO4J") == "1"
 CSV_DIR = os.getenv("CSV_DIR", "data/synthetic")
+WEIGHTS_FILE = os.getenv("GNN_WEIGHTS", "atmograph_hetero_gnn.pt")
 CAP_SCALE = 100.0      # real capacity_index / route_capacity_index are 0..100 (seen: 40..96)
 
 rng = np.random.default_rng(SEED)
@@ -196,7 +197,7 @@ def build_static(raw):
     C = C / np.maximum(C.sum(1, keepdims=True), 1)
     for k in ("from_port", "to_port"):
         for s, d, w in zip(*edges[("route", k, "port")]): R2P[d, s] = 1
-    return dict(ids=ids, x=x, edges=edges, U=U, A=A, C=C, R2P=R2P, etypes=etypes,
+    return dict(ids=ids, x=x, edges=edges, U=U, A=A, C=C, R2P=R2P, etypes=etypes, regions=regions, cats=cats,
                 cap_port=x["port"][:, 0], cap_route=x["route"][:, 1], n=dict(I=nI, P=nP, R=nR, C=nC))
 
 
@@ -225,7 +226,7 @@ def make_scenario(S, d, targets):
     data = HeteroData()
     for nt, arr in S["x"].items():
         data[nt].x = torch.tensor(arr)
-    dv = np.concatenate([[d["severity"] / SEV_MAX, d["duration_days"] / DUR_MAX],
+    dv = np.concatenate([[d["severity"] / SEV_MAX, min(d["duration_days"], DUR_MAX) / DUR_MAX],
                          onehot([d["event_type"]], S["etypes"])[0]]).astype(np.float32)
     data["disruption"].x = torch.tensor(dv).view(1, -1)
     for (s_t, rel, d_t), (src, dst, w) in S["edges"].items():
@@ -243,6 +244,12 @@ def make_scenario(S, d, targets):
     for nt, arr in y.items():
         data[nt].y = torch.tensor(arr, dtype=torch.float)
     return data
+
+
+def make_meta(S, layers):
+    """Saved next to the weights so the service can check that weights and data really match."""
+    return dict(layers=layers, regions=list(S["regions"]), categories=list(S["cats"]),
+                etypes=list(S["etypes"]), counts=dict(S["n"]))
 
 
 def random_scenario(S, held_out=False):
@@ -397,7 +404,8 @@ if __name__ == "__main__":
     if len(real) == len(raw["disruption"]) and raw["disruption"]:
         did = raw["disruption"][min(1, len(real) - 1)]["id"]
         demo(models[5], S, raw, real, did)
-    torch.save(models[5].state_dict(), "atmograph_hetero_gnn.pt")
+    torch.save({"state_dict": models[5].state_dict(), "meta": make_meta(S, 5)}, WEIGHTS_FILE)
+    print(f"\nsaved {WEIGHTS_FILE} (trained on: {src})")
 
 def __getattr__(name):
     # lazy import, avoids the circular import
