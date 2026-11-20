@@ -7,30 +7,27 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from neo4j.time import Date, DateTime, Time, Duration
 
-from database import driver
-
-
-# Database name is read from .env. The fallback is your AtmoGraph database.
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "8afc8fe5")
+from database import DATABASE as NEO4J_DATABASE
+from database import close_connection, get_database_session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run startup/shutdown tasks for the API."""
+    """Run application shutdown tasks."""
     yield
-    driver.close()
+    close_connection()
 
 
 app = FastAPI(
     title="AtmoGraph API",
     description="Supply Chain Ripple Effect Predictor",
-    version="1.1.0",
+    version="1.2.0",
     lifespan=lifespan,
 )
 
 
 # During local development, React usually runs on localhost:5173 (Vite).
-# Add other frontend origins to FRONTEND_ORIGINS in .env, separated by commas.
+# Add deployed frontend origins to FRONTEND_ORIGINS, separated by commas.
 allowed_origins = [
     origin.strip()
     for origin in os.getenv(
@@ -114,22 +111,109 @@ def home():
 
 
 @app.get("/health")
+@app.get("/graph/health")
 def health():
     """Check whether the API can reach the configured Neo4j database."""
     try:
-        with driver.session(database=NEO4J_DATABASE) as session:
+        with get_database_session() as session:
             session.run("RETURN 1 AS result").single()
-        return {"status": "healthy", "database": NEO4J_DATABASE}
-    except Exception as exc:
+
+        return {
+            "status": "healthy",
+            "database": NEO4J_DATABASE,
+            "connected": True,
+        }
+    except Exception:
         raise HTTPException(
             status_code=503,
-            detail=f"Neo4j connection failed: {str(exc)}",
-        ) from exc
+            detail={
+                "status": "unhealthy",
+                "database": NEO4J_DATABASE,
+                "connected": False,
+                "message": "Neo4j connection or query failed",
+            },
+        )
+
+
+@app.get("/graph/stats")
+def graph_stats():
+    """Return total nodes, relationships, and counts grouped by type."""
+    try:
+        with get_database_session() as session:
+            total_nodes = session.run(
+                "MATCH (n) RETURN count(n) AS total"
+            ).single()["total"]
+
+            total_relationships = session.run(
+                "MATCH ()-[r]->() RETURN count(r) AS total"
+            ).single()["total"]
+
+            node_records = session.run(
+                """
+                MATCH (n)
+                UNWIND labels(n) AS label
+                RETURN label, count(*) AS total
+                ORDER BY label
+                """
+            )
+            node_counts = {
+                record["label"]: record["total"] for record in node_records
+            }
+
+            relationship_records = session.run(
+                """
+                MATCH ()-[r]->()
+                RETURN type(r) AS relationship, count(r) AS total
+                ORDER BY relationship
+                """
+            )
+            relationship_counts = {
+                record["relationship"]: record["total"]
+                for record in relationship_records
+            }
+
+        return {
+            "database": NEO4J_DATABASE,
+            "total_nodes": total_nodes,
+            "total_relationships": total_relationships,
+            "node_counts": node_counts,
+            "relationship_counts": relationship_counts,
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not calculate graph statistics",
+        )
+
+
+@app.get("/graph/schema")
+def graph_schema():
+    """Return the node labels and relationship types present in Neo4j."""
+    try:
+        with get_database_session() as session:
+            label_records = session.run("CALL db.labels()")
+            labels = [record["label"] for record in label_records]
+
+            relationship_records = session.run("CALL db.relationshipTypes()")
+            relationship_types = [
+                record["relationshipType"] for record in relationship_records
+            ]
+
+        return {
+            "database": NEO4J_DATABASE,
+            "node_labels": labels,
+            "relationship_types": relationship_types,
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not inspect graph schema",
+        )
 
 
 @app.get("/student")
 def student():
-    # Kept from your original file so the existing test endpoint still works.
+    # Kept from your original file so the test endpoint still works.
     return {"name": "Mayank", "role": "Developer", "project": "AtmoGraph"}
 
 
@@ -137,7 +221,7 @@ def student():
 def get_graph():
     """Return graph nodes, relationships, and summary counts for the frontend."""
     try:
-        with driver.session(database=NEO4J_DATABASE) as session:
+        with get_database_session() as session:
             # Query 1: fetch every node, including nodes with no relationships.
             node_records = session.run(
                 """
@@ -173,7 +257,7 @@ def get_graph():
                     node_type_counts.get(primary_label, 0) + 1
                 )
 
-            # Query 2: fetch every relationship and map endpoints to frontend IDs.
+            # Query 2: fetch relationships and map endpoints to frontend node IDs.
             relationship_records = session.run(
                 """
                 MATCH (source)-[r]->(target)
@@ -192,7 +276,6 @@ def get_graph():
                 target_id = nodes_by_element_id.get(record["target_element_id"])
                 relationship_type = record["relationship_type"]
 
-                # Defensive check: endpoints should normally be present from Query 1.
                 if source_id is None or target_id is None:
                     continue
 
@@ -220,8 +303,8 @@ def get_graph():
             },
         }
 
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Could not fetch graph data: {str(exc)}",
-        ) from exc
+            detail="Could not fetch graph data",
+        )

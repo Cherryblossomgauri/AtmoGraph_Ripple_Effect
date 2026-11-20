@@ -101,3 +101,31 @@ flowchart TD
 - Coordinate schema changes before merging to the main branch.
 - Keep `.env` private; never commit credentials.
 - The first version is a prototype. Define prediction targets and evaluation before GNN training.
+
+## AtmoGraph backend update
+
+This update preserves the existing `/`, `/health`, `/student`, and `/graph` routes
+and adds:
+
+- `GET /graph/health` (also available at the existing `/health`)
+- `GET /graph/stats`
+- `GET /graph/schema`
+
+### Apply
+
+Replace the existing `main.py` and `database.py` in the backend's current location.
+Keep the `.env` file and Render environment variables unchanged.
+
+The configured database fallback remains `8afc8fe5`, matching the supplied project files.
+
+### Test after deployment
+
+- `/docs`
+- `/health`
+- `/graph/health`
+- `/graph/stats`
+- `/graph/schema`
+- `/graph`
+
+No GNN model or training code is added by this update. These endpoints inspect and
+monitor the existing Neo4j graph; they do not generate impact predictions.
