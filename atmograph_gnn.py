@@ -399,5 +399,9 @@ if __name__ == "__main__":
         demo(models[5], S, raw, real, did)
     torch.save(models[5].state_dict(), "atmograph_hetero_gnn.pt")
 
-if __name__ != "__main__":
-    from gnn_api import app  # lets "uvicorn atmograph_gnn:app --reload" work
+def __getattr__(name):
+    # lazy import, avoids the circular import
+    if name == "app":
+        from gnn_api import app
+        return app
+    raise AttributeError(name)
