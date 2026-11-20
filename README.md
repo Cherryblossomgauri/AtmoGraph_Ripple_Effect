@@ -31,6 +31,7 @@ python atmograph_gnn.py
 The first output line shows the data source. It should say `CSV files in data/synthetic`. If it says `MOCK`, the CSV folder was not found and the model trained on fake backup data.
 
 Training overwrites `atmograph_hetero_gnn.pt`. The `.pt` file and the `data/synthetic` folder must always come from the same run.
+The `.pt` file now also stores the region / category / event-type lists it was trained on. At startup `gnn_service.py` compares them with the loaded data and stops with a clear message if they differ.
 
 ## 3. Run the API
 
@@ -56,7 +57,7 @@ Request:
 }
 ```
 - `severity`: 1 to 5
-- `duration_days`: 1 to 60
+- `duration_days`: 1 to 60 (the model was trained on 2 to 30, so values above 30 are treated as 30)
 - `target_ids`: one or more port ids (P..) or route ids (R..)
 
 Response:
@@ -97,4 +98,5 @@ No code changes are needed.
 |---|---|
 | `ModuleNotFoundError: gnn_service` | Run the command from the project folder and make sure `gnn_service.py` is there |
 | `FileNotFoundError ... .pt` | Run `python atmograph_gnn.py` first |
+| `size mismatch for enc.country.weight` / `Weights/data mismatch` | The `.pt` was trained on different data (often MOCK data) than the CSVs now loaded. Run `python atmograph_gnn.py`, check the first line says `CSV files in data/synthetic`, then restart the API |
 | HTTP 422 on `/gnn/predict` | Check allowed values with `GET /gnn/options` |
