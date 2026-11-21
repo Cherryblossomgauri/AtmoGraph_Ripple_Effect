@@ -1,4 +1,4 @@
-## My Work: Supply Chain Risk Graph (Riya Chaudhari)
+## My Work: Supply Chain Risk Graph
 
 **Branch:** `riya-data`
 
@@ -12,7 +12,7 @@ This part of AtmoGraph turns shipment data into a supply network, spreads a disr
 4. Saves the network with risk values to `graph.json`.
 5. Draws the network in the browser with D3.js. Nodes are colored by risk, and clicking a node shows its shipments.
 
-### Files I worked on
+### Files I worked on###
 
 | File | Purpose |
 |---|---|
