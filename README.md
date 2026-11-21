@@ -43,7 +43,6 @@ This part of AtmoGraph turns shipment data into a supply network, spreads a disr
 | Blue | No risk |
 
 ### How to run
-
 Run these from the `riya` folder, with the virtual environment active (`(virtual_env)` shows in the terminal):
 
 ```powershell
@@ -52,24 +51,24 @@ python risk_check.py "Tsunami hits China"
 python -m http.server 8000
 ```
 
-Then open `http://localhost:8000/graph.html` in Chrome. The page must be served over HTTP. Opening the file directly will not load `graph.json`.
+Then open `http://localhost:8000/graph.html` in Chrome. 
+The page must be served over HTTP. 
+Opening the file directly will not load `graph.json`.
 
 To reset the view, run `python supply_graph.py` again.
 
 ### Neo4j
-
 `load_to_neo4j.py` reads `graph.json` and writes each node (with its risk) and each shipment link into Neo4j. It reads the connection details from a `.env` file, which is not committed to GitHub.
 
 ```powershell
 python load_to_neo4j.py
 ```
-
 The `.env` file needs three lines:
 
 ```
-NEO4J_URI=your-connection-uri
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your-password
+##NEO4J_URI=your-connection-uri
+##NEO4J_USER=neo4j
+##NEO4J_PASSWORD=your-password
 ```
 
 Never commit `.env` or paste its contents into this README.
