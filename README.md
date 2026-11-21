@@ -1,19 +1,22 @@
-<h1 align="center">🌐 ATMOGRAPH</h1>
-<h2 align="center">SUPPLY CHAIN RIPPLE EFFECT</h2>
+## My Work: Supply Chain Risk Graph (Riya)
 
-**Visualizing Global Supply Chain Disruptions Through Graph-Based Intelligence.**
+I built the data pipeline and risk viewer for AtmoGraph.
 
-AtmoGraph is a graph-based neural network project designed to track and analyze disruptions across global supply chain networks. It explores how a disruption in one node can create ripple effects across interconnected suppliers, manufacturers, and distributors.
+### Completed
+- **Graph from shipments:** `supply_graph.py` reads `shipments.csv` and builds countries and companies as nodes, with shipments as links.
+- **Ripple effect:** `risk_check.py` takes a news sentence such as "Tsunami hits China," marks the matching nodes as directly hit, and spreads lower risk along supply links. Risk halves at each step away from the event.
+- **Interactive viewer:** `graph.html` draws the network with D3.js, colors nodes by risk level, and shows shipment details when a node is clicked.
+- **Entity extraction:** `ner_entities.py` uses spaCy to find companies and countries in sentences.
 
-###Technology Stack
-- **Frontend:** React.js
-- **Visualization:** D3.js
-- **Backend:** Python
-- **Database:** Neo4j
-- **Query Language:** Cypher
+### In progress
+- Loading the graph into Neo4j (`load_to_neo4j.py`)
+- Reading live news automatically
+- 30/60/90-day timeline predictions
+- Graph Neural Network model
 
-### Key Objective
-To understand supply chain dependencies, identify disruption propagation, and visualize the ripple effect across interconnected networks.
-
-###Vision
-Building smarter, more connected, and resilient supply chain networks through graph-based intelligence.
+### How to run
+Run these from the `riya` folder, with the virtual environment active:
+1. `pip install -r requirements.txt`
+2. `python supply_graph.py`
+3. `python risk_check.py "Tsunami hits China"`
+4. `python -m http.server 8000`, then open `http://localhost:8000/graph.html`
