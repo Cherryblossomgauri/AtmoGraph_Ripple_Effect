@@ -1,11 +1,194 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Infyntrek Solutions Internship</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AtmoGraph – Disruption ripple simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --fog:#eef2f2; --paper:#fbfcfc; --ink:#12262d; --ink-2:#4a5f67; --line:#d3dde0;
+    --sea:#1f6f78; --sea-dark:#164f56; --warn:#c2410c;
+    --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --fog:#0f1b20; --paper:#16262c; --ink:#e6eff1; --ink-2:#9db3ba; --line:#2a3f47; --sea:#58b6c0; --sea-dark:#8fd3db; --warn:#fb923c; }
+  }
+  *{box-sizing:border-box}
+  html{scroll-padding-top:1rem}
+  body{margin:0;background:var(--fog);color:var(--ink);font:400 16px/1.55 var(--sans)}
+  h1,h2,h3{margin:0;font-weight:400}
+  button,select,input{font:inherit;color:inherit}
+  :focus-visible{outline:3px solid var(--sea);outline-offset:2px}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+  header{padding:1rem 0 1.75rem;max-width:60ch}
+  header h1{font:400 clamp(2rem,5vw,3.1rem)/1.05 var(--serif);letter-spacing:-.01em}
+  header p{margin:.6rem 0 0;color:var(--ink-2)}
+
+  .layout{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:1.5rem;align-items:start}
+  @media (max-width:860px){.layout{grid-template-columns:1fr}}
+
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:1.25rem}
+  .panel h2{font:400 1.5rem/1.2 var(--serif);margin-bottom:.25rem}
+  .hint{color:var(--ink-2);font-size:.875rem;margin:0 0 1rem}
+
+  .field{margin-top:1.15rem}
+  .field > label,.field > .lbl{display:flex;justify-content:space-between;align-items:baseline;font-weight:600;font-size:.9rem;margin-bottom:.35rem}
+  .field .val{font-weight:500;color:var(--sea-dark)}
+  .small{font-size:.8rem;color:var(--ink-2);margin:.3rem 0 0}
+
+  select{width:100%;padding:.6rem .7rem;border:1px solid var(--line);border-radius:9px;background:var(--fog)}
+  input[type=range]{width:100%;accent-color:var(--sea)}
+
+  .chips{display:flex;flex-wrap:wrap;gap:.4rem;max-height:9.5rem;overflow:auto;padding:2px}
+  .chip{border:1px solid var(--line);background:var(--fog);border-radius:999px;padding:.25rem .7rem;font-size:.85rem;cursor:pointer}
+  .chip[aria-pressed=true]{background:var(--sea);border-color:var(--sea);color:#fff}
+  .group-title{font-size:.8rem;color:var(--ink-2);margin:.5rem 0 .3rem}
+  .group-title:first-child{margin-top:0}
+
+  .run{margin-top:1.4rem;width:100%;padding:.8rem 1rem;border:0;border-radius:10px;background:var(--sea);color:#fff;font-weight:600;cursor:pointer}
+  .run:hover{background:var(--sea-dark)}
+  .run:disabled{opacity:.6;cursor:progress}
+
+  .notice{margin-top:1rem;padding:.7rem .9rem;border-radius:10px;font-size:.9rem;border:1px solid var(--line);background:var(--fog)}
+  .notice.err{border-color:var(--warn);color:var(--warn)}
+  .notice code{font-family:ui-monospace,Consolas,monospace;font-size:.85em}
+
+  .empty{padding:2.5rem 1rem;text-align:center;color:var(--ink-2)}
+  .empty svg{width:120px;height:120px;opacity:.55}
+  .empty p{max-width:42ch;margin:.75rem auto 0}
+
+  .summary{display:grid;grid-template-columns:200px minmax(0,1fr);gap:1.25rem;align-items:center}
+  @media (max-width:560px){.summary{grid-template-columns:1fr;justify-items:center;text-align:center}}
+  .ripple{width:200px;height:200px}
+  .ripple .ring{fill:none;transform-origin:120px 120px;animation:expand .9s ease-out both}
+  @keyframes expand{from{transform:scale(.35);opacity:0}to{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.ripple .ring{animation:none}}
+  .headline{font:400 1.6rem/1.25 var(--serif)}
+  .facts{display:flex;flex-wrap:wrap;gap:.4rem 1.25rem;margin:.75rem 0 0;padding:0;list-style:none;color:var(--ink-2);font-size:.9rem}
+  .facts b{color:var(--ink);font-weight:600}
+
+  .tabs{display:flex;gap:.25rem;margin:1.5rem 0 .75rem;border-bottom:1px solid var(--line)}
+  .tab{border:0;background:none;padding:.55rem .9rem;cursor:pointer;color:var(--ink-2);border-bottom:3px solid transparent;margin-bottom:-1px;font-weight:500}
+  .tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--sea)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-size:.8rem;color:var(--ink-2);margin:0 0 .75rem}
+  .legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.35rem;vertical-align:-1px}
+
+  .rows{list-style:none;margin:0;padding:0}
+  .row{display:grid;grid-template-columns:9.5rem minmax(0,1fr) 7.2rem;gap:.75rem;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .id{font-weight:600}
+  .row.target .id::after{content:" (hit)";font-weight:400;color:var(--warn);font-size:.8rem}
+  .bar{height:.8rem;background:var(--fog);border-radius:99px;overflow:hidden}
+  .bar span{display:block;height:100%;border-radius:99px;transition:width .5s ease}
+  .num{text-align:right;font-variant-numeric:tabular-nums;font-size:.9rem}
+  .num small{color:var(--ink-2);margin-left:.3rem}
+  .more{margin-top:.75rem;background:none;border:1px solid var(--line);border-radius:9px;padding:.45rem .9rem;cursor:pointer}
+
+  .foot{margin-top:1.25rem;font-size:.82rem;color:var(--ink-2);max-width:70ch}
+</style>
 </head>
 <body>
-    This is my first project with Infyntrek Solutions!!
-</body>
-</html>
+<div class="wrap">
+  <header>
+    <h1>What happens when a port or route is disrupted?</h1>
+    <p>Pick a disruption and where it hits. AtmoGraph shows how the impact spreads to other ports, industries and countries.</p>
+  </header>
+
+  <div class="layout">
+    <!-- Inputs -->
+    <section class="panel" aria-labelledby="in-title">
+      <h2 id="in-title">Set up the disruption</h2>
+      <p class="hint">All values come from the model, so you can only choose what it understands.</p>
+
+      <div class="field">
+        <label for="event">What happened?</label>
+        <select id="event" disabled><option>Loading…</option></select>
+      </div>
+
+      <div class="field">
+        <label for="sev">How severe? <span class="val" id="sevVal">3 of 5</span></label>
+        <input id="sev" type="range" min="1" max="5" step="1" value="3">
+        <p class="small">1 is a mild disruption, 5 is a major one.</p>
+      </div>
+
+      <div class="field">
+        <label for="dur">How long does it last? <span class="val" id="durVal">10 days</span></label>
+        <input id="dur" type="range" min="2" max="30" step="1" value="10">
+        <p class="small">The model was trained on 2 to 30 days.</p>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Where does it hit? <span class="val" id="tgtVal">none selected</span></span>
+        <div id="targets" class="chips-wrap"><p class="small">Loading ports and routes…</p></div>
+        <p class="small">Choose one or more.</p>
+      </div>
+
+      <button class="run" id="run" disabled>Show the ripple effect</button>
+      <div id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <!-- Results -->
+    <section class="panel" aria-labelledby="out-title" aria-live="polite">
+      <h2 id="out-title" class="sr" style="position:absolute;left:-9999px">Results</h2>
+      <div id="results">
+        <div class="empty">
+          <svg viewBox="0 0 240 240" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-width="3">
+              <circle cx="120" cy="120" r="14" fill="currentColor"/>
+              <circle cx="120" cy="120" r="44"/><circle cx="120" cy="120" r="76" stroke-dasharray="6 8"/><circle cx="120" cy="120" r="108" stroke-dasharray="3 10"/>
+            </g>
+          </svg>
+          <p>Results will appear here. Choose a disruption on the left, then select <b>Show the ripple effect</b>.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <p class="foot">How to read this: each score runs from 0 to 100% and shows how strongly that item is affected. The model is trained on a rule-based simulator, not real-world outcomes, so the ranking is more reliable than the exact percentages.</p>
+</div>
+
+<script>
+/* API address: same server when served by FastAPI, local server when this file is opened directly. */
+const API = new URLSearchParams(location.search).get("api")
+         || (location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
+
+const $ = id => document.getElementById(id);
+const state = { options:null, targets:new Set(), data:null, tab:"industry_impact", showAll:false };
+
+const LEVELS = [
+  {max:.10, name:"Minimal",  color:"#9fc5c9"},
+  {max:.30, name:"Low",      color:"#e0c35a"},
+  {max:.50, name:"Moderate", color:"#e8923a"},
+  {max:.70, name:"High",     color:"#d9552b"},
+  {max:1.01,name:"Severe",   color:"#a3201f"},
+];
+const level = v => LEVELS.find(l => v < l.max) || LEVELS[LEVELS.length-1];
+const pretty = s => s.toLowerCase().replace(/_/g," ").replace(/^./,c=>c.toUpperCase());
+const pct = v => Math.round(v*100) + "%";
+const el = (tag, props={}, ...kids) => {
+  const n = Object.assign(document.createElement(tag), props);
+  kids.forEach(k => n.append(k)); return n;
+};
+
+/* ---------- load options ---------- */
+async function loadOptions(){
+  try{
+    const r = await fetch(API + "/gnn/options");
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    state.options = await r.json();
+    buildForm();
+  }catch(e){
+    $("status").replaceChildren(el("div",{className:"notice err"},
+      "Can't reach the AtmoGraph API. Start it from the project folder with ",
+      el("code",{textContent:"python -m uvicorn gnn_api:app --reload"}),
+      ", then reload this page."));
+    $("event").replaceChildren(el("option",{textContent:"Unavailable"}));
+    $("targets").replaceChildren(el("p",{className:"small",textContent:"Waiting for the API."}));
+  }
+}
