@@ -1,26 +1,25 @@
 """
 gnn_api.py - FastAPI endpoints for the AtmoGraph GNN
 
-Needs, in the same folder: atmograph_gnn.py, atmograph_hetero_gnn.pt, gnn_service.py, data/synthetic/
+Needs, in the same folder: atmograph_gnn.py, atmograph_hetero_gnn.pt, gnn_service.py, data/synthetic/, Index.html
 
 Run it alone to test:
     pip install fastapi uvicorn
-    uvicorn gnn_api:app --reload
-    then open http://127.0.0.1:8000/docs
-
-Plug into the main project (friend's FastAPI app):
-    from gnn_api import router as gnn_router, preload
-    app.include_router(gnn_router)
-    # and call preload() once at startup so the first request is not slow
+    python -m uvicorn gnn_api:app --reload
+    then open http://127.0.0.1:8000/
 """
 from contextlib import asynccontextmanager
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from gnn_service import AtmoGraphPredictor
+
+BASE_DIR = Path(__file__).parent
 
 
 @lru_cache(maxsize=1)
@@ -81,3 +80,9 @@ app.include_router(router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+def home():
+    """Serves the web page, so the page and the API share one address."""
+    return FileResponse(BASE_DIR / "Index.html")
