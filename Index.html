@@ -24,13 +24,15 @@
   button,select,input{font:inherit;color:inherit}
   :focus-visible{outline:3px solid var(--sea);outline-offset:2px}
 
-  .wrap{max-width:1120px;margin:0 auto;padding:1.5rem 1.25rem 3rem}
-  header{padding:1rem 0 1.75rem;max-width:60ch}
+  .wrap{max-width:1320px;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+  header{padding:1rem 0 1.5rem;max-width:60ch}
   header h1{font:400 clamp(2rem,5vw,3.1rem)/1.05 var(--serif);letter-spacing:-.01em}
   header p{margin:.6rem 0 0;color:var(--ink-2)}
 
-  .layout{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:1.5rem;align-items:start}
-  @media (max-width:860px){.layout{grid-template-columns:1fr}}
+  .layout{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:1.25rem;align-items:start}
+  @media (max-width:980px){.layout{grid-template-columns:1fr}}
+  .controls{position:sticky;top:1rem}
+  @media (max-width:980px){.controls{position:static}}
 
   .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:1.25rem}
   .panel h2{font:400 1.5rem/1.2 var(--serif);margin-bottom:.25rem}
@@ -58,7 +60,18 @@
   .notice.err{border-color:var(--warn);color:var(--warn)}
   .notice code{font-family:ui-monospace,Consolas,monospace;font-size:.85em}
 
-  .empty{padding:2.5rem 1rem;text-align:center;color:var(--ink-2)}
+  /* ---------- dashboard ---------- */
+  .dash{display:grid;gap:1.25rem;min-width:0}
+  .row-top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:1.25rem}
+  .row-lists{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.25rem}
+  @media (max-width:1180px){.row-lists{grid-template-columns:1fr 1fr}}
+  @media (max-width:760px){.row-top,.row-lists{grid-template-columns:1fr}}
+
+  .card-title{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;margin-bottom:.6rem}
+  .card-title h3{font:400 1.3rem/1.2 var(--serif)}
+  .card-title span{font-size:.8rem;color:var(--ink-2)}
+
+  .empty{padding:3rem 1rem;text-align:center;color:var(--ink-2)}
   .empty svg{width:120px;height:120px;opacity:.55}
   .empty p{max-width:42ch;margin:.75rem auto 0}
 
@@ -67,28 +80,24 @@
   .ripple{width:200px;height:200px}
   .ripple .ring{fill:none;transform-origin:120px 120px;animation:expand .9s ease-out both}
   @keyframes expand{from{transform:scale(.35);opacity:0}to{transform:scale(1)}}
-  @media (prefers-reduced-motion:reduce){.ripple .ring{animation:none}}
+  @media (prefers-reduced-motion:reduce){.ripple .ring{animation:none}.bar span{transition:none}}
   .headline{font:400 1.6rem/1.25 var(--serif)}
   .facts{display:flex;flex-wrap:wrap;gap:.4rem 1.25rem;margin:.75rem 0 0;padding:0;list-style:none;color:var(--ink-2);font-size:.9rem}
   .facts b{color:var(--ink);font-weight:600}
 
-  .tabs{display:flex;gap:.25rem;margin:1.5rem 0 .75rem;border-bottom:1px solid var(--line)}
-  .tab{border:0;background:none;padding:.55rem .9rem;cursor:pointer;color:var(--ink-2);border-bottom:3px solid transparent;margin-bottom:-1px;font-weight:500}
-  .tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--sea)}
-
-  .legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-size:.8rem;color:var(--ink-2);margin:0 0 .75rem}
+  .legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-size:.8rem;color:var(--ink-2);margin:0}
   .legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.35rem;vertical-align:-1px}
 
   .rows{list-style:none;margin:0;padding:0}
-  .row{display:grid;grid-template-columns:9.5rem minmax(0,1fr) 7.2rem;gap:.75rem;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--line)}
+  .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.15rem .75rem;align-items:baseline;padding:.45rem 0;border-bottom:1px solid var(--line)}
   .row:last-child{border-bottom:0}
-  .row .id{font-weight:600}
+  .row .id{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .row.target .id::after{content:" (hit)";font-weight:400;color:var(--warn);font-size:.8rem}
-  .bar{height:.8rem;background:var(--fog);border-radius:99px;overflow:hidden}
+  .bar{grid-column:1 / -1;height:.6rem;background:var(--fog);border-radius:99px;overflow:hidden}
   .bar span{display:block;height:100%;border-radius:99px;transition:width .5s ease}
   .num{text-align:right;font-variant-numeric:tabular-nums;font-size:.9rem}
   .num small{color:var(--ink-2);margin-left:.3rem}
-  .more{margin-top:.75rem;background:none;border:1px solid var(--line);border-radius:9px;padding:.45rem .9rem;cursor:pointer}
+  .more{margin-top:.6rem;background:none;border:1px solid var(--line);border-radius:9px;padding:.4rem .9rem;cursor:pointer;font-size:.85rem}
 
   .foot{margin-top:1.25rem;font-size:.82rem;color:var(--ink-2);max-width:70ch}
 </style>
@@ -102,7 +111,7 @@
 
   <div class="layout">
     <!-- Inputs -->
-    <section class="panel" aria-labelledby="in-title">
+    <section class="panel controls" aria-labelledby="in-title">
       <h2 id="in-title">Set up the disruption</h2>
       <p class="hint">All values come from the model, so you can only choose what it understands.</p>
 
@@ -125,7 +134,7 @@
 
       <div class="field">
         <span class="lbl">Where does it hit? <span class="val" id="tgtVal">none selected</span></span>
-        <div id="targets" class="chips-wrap"><p class="small">Loading ports and routes…</p></div>
+        <div id="targets"><p class="small">Loading ports and routes…</p></div>
         <p class="small">Choose one or more.</p>
       </div>
 
@@ -133,11 +142,10 @@
       <div id="status" role="status" aria-live="polite"></div>
     </section>
 
-    <!-- Results -->
-    <section class="panel" aria-labelledby="out-title" aria-live="polite">
-      <h2 id="out-title" class="sr" style="position:absolute;left:-9999px">Results</h2>
+    <!-- Dashboard -->
+    <section class="dash" aria-label="Results" aria-live="polite">
       <div id="results">
-        <div class="empty">
+        <div class="panel empty">
           <svg viewBox="0 0 240 240" aria-hidden="true">
             <g fill="none" stroke="currentColor" stroke-width="3">
               <circle cx="120" cy="120" r="14" fill="currentColor"/>
@@ -159,7 +167,8 @@ const API = new URLSearchParams(location.search).get("api")
          || (location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
 
 const $ = id => document.getElementById(id);
-const state = { options:null, targets:new Set(), data:null, tab:"industry_impact", showAll:false };
+const state = { options:null, targets:new Set(), data:null, expanded:{} };
+const PREVIEW = 8;
 
 const LEVELS = [
   {max:.10, name:"Minimal",  color:"#9fc5c9"},
@@ -185,10 +194,195 @@ async function loadOptions(){
     buildForm();
   }catch(e){
     $("status").replaceChildren(el("div",{className:"notice err"},
-      "Can't reach the AtmoGraph API. Start it from the project folder with ",
+      "Can’t reach the AtmoGraph API. Start it from the project folder with ",
       el("code",{textContent:"python -m uvicorn gnn_api:app --reload"}),
       ", then reload this page."));
     $("event").replaceChildren(el("option",{textContent:"Unavailable"}));
     $("targets").replaceChildren(el("p",{className:"small",textContent:"Waiting for the API."}));
   }
 }
+
+/* ---------- form ---------- */
+function buildForm(){
+  const o = state.options;
+  const ev = $("event");
+  ev.replaceChildren(...o.event_types.map(t => el("option",{value:t,textContent:pretty(t)})));
+  ev.disabled = false;
+
+  const [smin, smax] = o.severity_range;
+  $("sev").min = smin; $("sev").max = smax;
+  /* The model was trained on 2 to 30 days, so the slider stays inside that range. */
+  $("dur").min = Math.max(2, o.duration_days_range[0]);
+  $("dur").max = Math.min(30, o.duration_days_range[1]);
+
+  const group = (title, ids) => {
+    const box = el("div",{className:"chips"});
+    ids.forEach(id => {
+      const b = el("button",{type:"button",className:"chip",textContent:id});
+      b.setAttribute("aria-pressed","false");
+      b.addEventListener("click", () => {
+        const on = !state.targets.has(id);
+        on ? state.targets.add(id) : state.targets.delete(id);
+        b.setAttribute("aria-pressed", String(on));
+        updateTargets();
+      });
+      box.append(b);
+    });
+    return [el("div",{className:"group-title",textContent:title}), box];
+  };
+  $("targets").replaceChildren(...group("Ports", o.ports), ...group("Routes", o.routes));
+  updateTargets();
+}
+
+function updateTargets(){
+  const n = state.targets.size;
+  $("tgtVal").textContent = n === 0 ? "none selected" : n <= 3 ? [...state.targets].join(", ") : n + " selected";
+  $("run").disabled = n === 0 || !state.options;
+}
+
+$("sev").addEventListener("input", e => $("sevVal").textContent = e.target.value + " of 5");
+$("dur").addEventListener("input", e => $("durVal").textContent = e.target.value + " days");
+
+/* ---------- run ---------- */
+$("run").addEventListener("click", async () => {
+  const btn = $("run");
+  btn.disabled = true; btn.textContent = "Calculating…";
+  $("status").replaceChildren();
+  try{
+    const r = await fetch(API + "/gnn/predict", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        event_type: $("event").value,
+        severity: +$("sev").value,
+        duration_days: +$("dur").value,
+        target_ids: [...state.targets],
+      }),
+    });
+    if(!r.ok){
+      let msg = "HTTP " + r.status;
+      try{
+        const j = await r.json();
+        msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+      }catch(_){}
+      throw new Error(msg);
+    }
+    state.data = await r.json();
+    state.expanded = {};
+    render();
+  }catch(e){
+    $("status").replaceChildren(el("div",{className:"notice err",textContent:"Could not run the simulation: " + e.message}));
+  }finally{
+    btn.textContent = "Show the ripple effect";
+    updateTargets();
+  }
+});
+
+/* ---------- dashboard ---------- */
+const sorted = obj => Object.entries(obj).sort((a,b) => b[1]-a[1]);
+
+function rippleSvg(peak){
+  const col = level(peak).color;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns,"svg");
+  svg.setAttribute("viewBox","0 0 240 240");
+  svg.setAttribute("class","ripple");
+  svg.setAttribute("role","img");
+  svg.setAttribute("aria-label","Ripple graphic, strongest impact: " + level(peak).name.toLowerCase());
+  const add = (tag, attrs) => {
+    const n = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([k,v]) => n.setAttribute(k,v));
+    svg.append(n); return n;
+  };
+  add("circle",{cx:120,cy:120,r:14,fill:col});
+  [[44,"","3"],[76,"6 8","3"],[108,"3 10","3"]].forEach(([r,dash,w],i) => {
+    const c = add("circle",{cx:120,cy:120,r,class:"ring",stroke:col,"stroke-width":w,
+      "stroke-opacity":(1 - i*.25).toFixed(2),style:"animation-delay:" + (i*.12) + "s"});
+    if(dash) c.setAttribute("stroke-dasharray",dash);
+  });
+  return svg;
+}
+
+function rowsFor(entries, targets){
+  return entries.map(([id,v]) => {
+    const l = level(v);
+    const li = el("li",{className:"row" + (targets.has(id) ? " target" : "")},
+      el("span",{className:"id",textContent:id,title:id}),
+      el("span",{className:"num"}, pct(v), el("small",{textContent:l.name})),
+      el("div",{className:"bar"}, Object.assign(el("span"),{})));
+    const fill = li.querySelector(".bar span");
+    fill.style.background = l.color;
+    fill.style.width = "0%";
+    requestAnimationFrame(() => requestAnimationFrame(() => fill.style.width = Math.max(v*100, 1.5) + "%"));
+    return li;
+  });
+}
+
+function listCard(key, title, entries, targets){
+  const card = el("div",{className:"panel"});
+  card.append(el("div",{className:"card-title"}, el("h3",{textContent:title}), el("span",{textContent:entries.length + " total"})));
+  const ul = el("ul",{className:"rows"});
+  const draw = () => {
+    const all = state.expanded[key];
+    ul.replaceChildren(...rowsFor(all ? entries : entries.slice(0,PREVIEW), targets));
+    if(more) more.textContent = all ? "Show fewer" : "Show all " + entries.length;
+  };
+  card.append(ul);
+  let more = null;
+  if(entries.length > PREVIEW){
+    more = el("button",{type:"button",className:"more"});
+    more.addEventListener("click", () => { state.expanded[key] = !state.expanded[key]; draw(); });
+    card.append(more);
+  }
+  draw();
+  return card;
+}
+
+function render(){
+  const d = state.data;
+  const targets = new Set(d.input.targets);
+  const ind = sorted(d.industry_impact);
+  const ports = sorted(d.port_impact);
+  const countries = sorted(d.country_impact);
+  const top = (d.top_industries && d.top_industries.length)
+    ? d.top_industries.map(t => [t.id, t.impact]) : ind.slice(0,5);
+
+  const peak = ind.length ? ind[0][1] : 0;
+  const serious = ind.filter(([,v]) => v >= .5).length;
+  const where = d.input.targets.length <= 2 ? d.input.targets.join(" and ") : d.input.targets.length + " locations";
+  const headline = serious > 0
+    ? pretty(d.input.event_type) + " at " + where + " puts " + serious + (serious === 1 ? " industry" : " industries") + " under high or severe impact."
+    : pretty(d.input.event_type) + " at " + where + " has a " + level(peak).name.toLowerCase() + " effect on industries.";
+
+  const summary = el("div",{className:"panel"},
+    el("div",{className:"summary"},
+      rippleSvg(peak),
+      el("div",{},
+        el("p",{className:"headline",textContent:headline}),
+        el("ul",{className:"facts"},
+          el("li",{},"Event: ", el("b",{textContent:pretty(d.input.event_type)})),
+          el("li",{},"Severity: ", el("b",{textContent:d.input.severity + " of 5"})),
+          el("li",{},"Duration: ", el("b",{textContent:d.input.duration_days + " days"})),
+          el("li",{},"Hit: ", el("b",{textContent:d.input.targets.join(", ")}))))));
+
+  const topCard = el("div",{className:"panel"},
+    el("div",{className:"card-title"}, el("h3",{textContent:"Most affected industries"}), el("span",{textContent:"top " + top.length})));
+  topCard.append(el("ul",{className:"rows"}, ...rowsFor(top, new Set())));
+
+  const legend = el("p",{className:"legend"}, ...LEVELS.map(l =>
+    el("span",{}, Object.assign(el("i"),{style:"background:" + l.color}), l.name)));
+
+  $("results").replaceChildren(
+    el("div",{className:"dash"},
+      el("div",{className:"row-top"}, summary, topCard),
+      legend,
+      el("div",{className:"row-lists"},
+        listCard("ports","Ports",ports,targets),
+        listCard("industries","Industries",ind,targets),
+        listCard("countries","Countries",countries,targets))));
+}
+
+loadOptions();
+</script>
+</body>
+</html>
