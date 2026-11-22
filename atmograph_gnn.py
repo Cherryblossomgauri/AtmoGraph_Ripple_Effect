@@ -30,7 +30,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.nn import HeteroConv, GraphConv
 
 SEED = 42
-N_SYNTH = 600          # synthetic training scenarios
+N_SYNTH = 2000          # synthetic training scenarios
 EPOCHS = 40
 HIDDEN = 48
 SEV_MAX = 5.0          # ASSUMPTION: severity scale 1..5 (ask Mayank)
@@ -253,13 +253,23 @@ def make_meta(S, layers):
 
 
 def random_scenario(S, held_out=False):
-    kind = "port" if rng.random() < 0.55 else "route"
-    n = S["n"]["P"] if kind == "port" else S["n"]["R"]
-    # held-out targets: last port and last route are never used for training
-    t = int(rng.integers(0, n - 1)) if not held_out else n - 1
+    def pick(kind):
+        n = S["n"]["P"] if kind == "port" else S["n"]["R"]
+        return (kind, n - 1 if held_out else int(rng.integers(0, n)))
+
+    if held_out:
+        targets = [pick("port" if rng.random() < 0.55 else "route")]
+    else:
+        k = int(rng.integers(1, 4))  # 1 to 3 targets, ports and routes mixed
+        targets, seen = [], set()
+        while len(targets) < k:
+            t = pick("port" if rng.random() < 0.55 else "route")
+            if t not in seen:
+                seen.add(t)
+                targets.append(t)
     d = dict(event_type=str(rng.choice(S["etypes"])), severity=int(rng.integers(1, int(SEV_MAX) + 1)),
-             duration_days=int(rng.integers(2, int(DUR_MAX))))
-    return make_scenario(S, d, [(kind, t)])
+             duration_days=int(rng.integers(2, int(DUR_MAX) + 1)))
+    return make_scenario(S, d, targets)
 
 
 def real_scenarios(S, raw):
@@ -391,7 +401,7 @@ if __name__ == "__main__":
     zero = lambda b: {t: torch.zeros_like(b[t].y) for t in TYPES}
     avg = lambda b: {t: mean_y[t].repeat(b["disruption"].x.shape[0]) for t in TYPES}
 
-    models = {L: fit(L, tl, vl, train[0]) for L in (1, 3, 5)}
+    models = {5: fit(5, tl, vl, train[0])}
     for title, ds in (("TEST: random scenarios", test), ("TEST: unseen port/route targets", unseen),
                       ("TEST: the 10 real disruption rows (rule labels)", real)):
         if not ds: continue
