@@ -4,7 +4,6 @@ import ForceGraph2D from "react-force-graph-2d";
 import "./App.css";
 import { getGraphData } from "./api";
 
-// Graph node structure
 interface GraphNode {
   id: string;
   name: string;
@@ -12,7 +11,6 @@ interface GraphNode {
   [key: string]: any;
 }
 
-// Graph relationship structure
 interface GraphLink {
   source: string;
   target: string;
@@ -25,7 +23,6 @@ interface GraphData {
   links: GraphLink[];
 }
 
-// Get an ID from a string, number, or Neo4j-style object
 function getId(value: any): string {
   if (value === null || value === undefined) return "";
 
@@ -41,38 +38,28 @@ function getId(value: any): string {
   return String(value);
 }
 
-// Convert the backend response into ForceGraph format
 function normalizeGraphData(data: any): GraphData {
-  // Handle common response wrappers
   const response = data?.data ?? data?.graph ?? data;
 
-  if (!response || typeof response !== "object") {
-    throw new Error("Invalid graph response from FastAPI.");
-  }
-
-  const rawNodes = response.nodes;
-
+  const rawNodes = response?.nodes;
   const rawLinks =
-    response.links ??
-    response.relationships ??
-    response.edges ??
-    response.rels ??
+    response?.links ??
+    response?.relationships ??
+    response?.edges ??
+    response?.rels ??
     [];
 
   if (!Array.isArray(rawNodes)) {
-    throw new Error(
-      "The API response does not contain a nodes array."
-    );
+    throw new Error("Invalid nodes array in API response.");
   }
 
   if (!Array.isArray(rawLinks)) {
-    throw new Error(
-      "The API relationships are not in a valid array format."
-    );
+    throw new Error("Invalid relationships array in API response.");
   }
 
   const nodes: GraphNode[] = rawNodes.map((node: any) => {
     const properties = node.properties ?? {};
+    const labels = node.labels ?? [];
 
     const id = getId(
       node.id ??
@@ -80,8 +67,6 @@ function normalizeGraphData(data: any): GraphData {
       node.identity ??
       properties.id
     );
-
-    const labels = node.labels ?? [];
 
     return {
       ...properties,
@@ -107,7 +92,6 @@ function normalizeGraphData(data: any): GraphData {
     return {
       ...properties,
       ...link,
-
       source: getId(
         link.source ??
         link.startNodeElementId ??
@@ -115,7 +99,6 @@ function normalizeGraphData(data: any): GraphData {
         link.from ??
         link.start
       ),
-
       target: getId(
         link.target ??
         link.endNodeElementId ??
@@ -123,7 +106,6 @@ function normalizeGraphData(data: any): GraphData {
         link.to ??
         link.end
       ),
-
       label:
         link.label ??
         link.type ??
@@ -131,7 +113,7 @@ function normalizeGraphData(data: any): GraphData {
         "CONNECTED"
     };
   }).filter(
-    (link: GraphLink) => link.source !== "" && link.target !== ""
+    link => link.source !== "" && link.target !== ""
   );
 
   return { nodes, links };
@@ -142,6 +124,9 @@ function App() {
     nodes: [],
     links: []
   });
+
+  const [selectedNode, setSelectedNode] =
+    useState<GraphNode | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -155,14 +140,10 @@ function App() {
         setError("");
 
         const response = await getGraphData();
+        console.log("API Response:", response);
 
-        console.log("Complete API Response:", response);
-        console.log("Response keys:", Object.keys(response ?? {}));
-
-        const normalizedData = normalizeGraphData(response);
-
-        console.log("Normalized Nodes:", normalizedData.nodes);
-        console.log("Normalized Links:", normalizedData.links);
+        const normalizedData =
+          normalizeGraphData(response);
 
         if (isMounted) {
           setGraphData(normalizedData);
@@ -193,53 +174,162 @@ function App() {
     };
   }, []);
 
+  // Called whenever a graph node is clicked
+  const handleNodeClick = (node: any) => {
+    setSelectedNode(node as GraphNode);
+    console.log("Selected node:", node);
+  };
+
+  // Close details when clicking the graph background
+  const handleBackgroundClick = () => {
+    setSelectedNode(null);
+  };
+
+  const formatValue = (value: any) => {
+    if (value === null || value === undefined) {
+      return "N/A";
+    }
+
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+
+    return String(value);
+  };
+
   return (
     <div className="app-container">
 
-      <h1>Supply Chain Dashboard</h1>
+      <header className="dashboard-header">
+        <h1>Supply Chain Dashboard</h1>
+        <p>Global Supply Chain Network Monitoring</p>
+      </header>
 
-      <section className="graph-section">
+      <div className="dashboard-layout">
 
-        <h2>Supply Chain Network Graph</h2>
+        <main className="graph-section">
 
-        {loading && (
-          <p>Loading graph from Neo4j...</p>
-        )}
+          <h2>Supply Chain Network Graph</h2>
 
-        {error && (
-          <p className="error-message">{error}</p>
-        )}
+          <div className="graph-instructions">
+            Scroll to zoom | Drag background to pan |
+            Click a node to view details
+          </div>
 
-        {!loading && !error && graphData.nodes.length === 0 && (
-          <p>No nodes were returned by the API.</p>
-        )}
+          {loading && (
+            <p>Loading graph from Neo4j...</p>
+          )}
 
-        {!loading && !error && graphData.nodes.length > 0 && (
-          <>
-            <p>
-              Nodes: {graphData.nodes.length} |
-              Relationships: {graphData.links.length}
-            </p>
+          {error && (
+            <p className="error-message">{error}</p>
+          )}
+
+          {!loading && !error &&
+            graphData.nodes.length === 0 && (
+              <p>No graph nodes were returned.</p>
+          )}
+
+          {!loading && !error &&
+            graphData.nodes.length > 0 && (
 
             <div className="graph-container">
 
               <ForceGraph2D
                 graphData={graphData}
                 width={850}
-                height={480}
+                height={550}
                 backgroundColor="#FFFFFF"
+
+                // Zoom and pan
+                enableZoomInteraction={true}
+                enablePanInteraction={true}
+                minZoom={0.3}
+                maxZoom={8}
+
+                // Node appearance
                 nodeAutoColorBy="group"
                 nodeLabel="name"
+
+                // Relationship appearance
                 linkLabel="label"
                 linkDirectionalArrowLength={5}
                 linkDirectionalArrowRelPos={1}
+
+                // Click interaction
+                onNodeClick={handleNodeClick}
+                onBackgroundClick={handleBackgroundClick}
               />
 
             </div>
-          </>
-        )}
+          )}
 
-      </section>
+        </main>
+
+        <aside className="details-panel">
+
+          <h2>Entity Details</h2>
+
+          {!selectedNode && (
+            <div className="empty-details">
+              <p>Select a node in the graph to view its details.</p>
+            </div>
+          )}
+
+          {selectedNode && (
+            <div className="node-details">
+
+              <div className="node-heading">
+                <h3>{selectedNode.name}</h3>
+
+                <span className="node-type">
+                  {selectedNode.group}
+                </span>
+              </div>
+
+              <div className="detail-list">
+
+                {Object.entries(selectedNode)
+                  .filter(([key, value]) =>
+                    ![
+                      "__indexColor",
+                      "x",
+                      "y",
+                      "vx",
+                      "vy",
+                      "fx",
+                      "fy",
+                      "index"
+                    ].includes(key) &&
+                    value !== undefined &&
+                    typeof value !== "function"
+                  )
+                  .map(([key, value]) => (
+                    <div className="detail-item" key={key}>
+                      <span className="detail-label">
+                        {key}
+                      </span>
+
+                      <span className="detail-value">
+                        {formatValue(value)}
+                      </span>
+                    </div>
+                  ))}
+
+              </div>
+
+              <button
+                className="close-details"
+                onClick={() => setSelectedNode(null)}
+              >
+                Close Details
+              </button>
+
+            </div>
+          )}
+
+        </aside>
+
+      </div>
 
     </div>
   );

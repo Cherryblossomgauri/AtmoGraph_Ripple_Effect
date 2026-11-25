@@ -356,4 +356,137 @@ body {
     right: 0;
     border-right-color: var(--border);
   }
+
+
+.dashboard-header {
+  padding: 20px 30px;
+  background: #172554;
+  color: white;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.dashboard-header p {
+  margin-bottom: 0;
+  color: #cbd5e1;
+}
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  padding: 20px;
+  align-items: start;
+}
+
+.graph-section,
+.details-panel {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+.graph-section h2,
+.details-panel h2 {
+  margin-top: 0;
+  color: #172554;
+}
+
+.graph-instructions {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 15px;
+}
+
+.graph-container {
+  width: 100%;
+  min-height: 550px;
+  overflow: hidden;
+}
+
+.details-panel {
+  min-height: 300px;
+}
+
+.empty-details {
+  color: #64748b;
+  background: #f8fafc;
+  padding: 18px;
+  border-radius: 8px;
+}
+
+.node-heading {
+  padding: 12px;
+  background: #eff6ff;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.node-heading h3 {
+  margin: 0 0 10px;
+  color: #1e3a8a;
+}
+
+.node-type {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 12px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #64748b;
+  text-transform: capitalize;
+}
+
+.detail-value {
+  font-size: 14px;
+  color: #1e293b;
+  overflow-wrap: anywhere;
+}
+
+.close-details {
+  width: 100%;
+  padding: 10px;
+  margin-top: 18px;
+  border: none;
+  border-radius: 6px;
+  background: #172554;
+  color: white;
+  cursor: pointer;
+}
+
+.close-details:hover {
+  background: #1e40af;
+}
+
+.error-message {
+  color: #dc2626;
+}
+
+@media (max-width: 900px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .details-panel {
+    width: auto;
+  }
+}
+
 }
