@@ -1,0 +1,438 @@
+
+/* =====================================
+   GLOBAL STYLES
+===================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* =====================================
+   MAIN DASHBOARD HEADER
+===================================== */
+
+.app-container {
+  min-height: 100vh;
+  width: 100%;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 22px 30px;
+  background: #172554;
+  color: white;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 700;
+}
+
+.dashboard-header p {
+  margin: 7px 0 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  color: #dcfce7;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 9px 14px;
+  border-radius: 20px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+}
+
+/* =====================================
+   DASHBOARD LAYOUT
+===================================== */
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  padding: 22px;
+  align-items: start;
+}
+
+/* =====================================
+   GRAPH SECTION
+===================================== */
+
+.graph-section,
+.details-panel {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
+}
+
+.graph-section {
+  min-width: 0;
+  padding: 22px;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: #172554;
+  font-size: 20px;
+}
+
+.section-heading p {
+  color: #64748b;
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
+.graph-counts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.graph-counts span {
+  background: #eff6ff;
+  color: #1e40af;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.graph-instructions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin: 20px 0 12px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.graph-container {
+  width: 100%;
+  min-height: 550px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+}
+
+.graph-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* =====================================
+   LOADING AND ERROR MESSAGES
+===================================== */
+
+.graph-message {
+  padding: 40px 15px;
+  text-align: center;
+  color: #64748b;
+}
+
+.error-message {
+  padding: 15px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 8px;
+}
+
+/* =====================================
+   ENTITY DETAILS PANEL
+===================================== */
+
+.details-panel {
+  padding: 20px;
+  min-width: 0;
+  max-height: 720px;
+  overflow-y: auto;
+}
+
+.details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 15px;
+  margin-bottom: 18px;
+}
+
+.details-header h2 {
+  font-size: 19px;
+  color: #172554;
+  margin: 0;
+}
+
+.details-header p {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 6px 0 0;
+}
+
+.close-icon {
+  border: none;
+  background: #f1f5f9;
+  color: #475569;
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.close-icon:hover {
+  background: #e2e8f0;
+}
+
+/* =====================================
+   EMPTY ENTITY STATE
+===================================== */
+
+.empty-details {
+  text-align: center;
+  padding: 35px 15px;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.empty-icon {
+  font-size: 38px;
+  color: #94a3b8;
+}
+
+.empty-details h3 {
+  color: #334155;
+  font-size: 15px;
+}
+
+.empty-details p {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* =====================================
+   ENTITY PROFILE
+===================================== */
+
+.entity-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 21px;
+}
+
+.entity-title-card {
+  text-align: center;
+  padding: 22px 12px;
+  border-radius: 11px;
+  background: linear-gradient(
+    135deg,
+    #eff6ff,
+    #f8fafc
+  );
+}
+
+.entity-avatar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 55px;
+  height: 55px;
+  margin: 0 auto 12px;
+  background: #1e3a8a;
+  color: white;
+  border-radius: 13px;
+  font-size: 24px;
+}
+
+.entity-title-card h3 {
+  color: #172554;
+  font-size: 19px;
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.entity-badge {
+  display: inline-block;
+  padding: 5px 13px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* =====================================
+   ENTITY INFORMATION CARDS
+===================================== */
+
+.details-section h4 {
+  color: #334155;
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.detail-card,
+.identifier-card {
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.detail-label {
+  display: block;
+  color: #64748b;
+  font-size: 10px;
+  margin-bottom: 7px;
+}
+
+.detail-value {
+  display: block;
+  color: #172554;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.identifier-card strong {
+  color: #1e40af;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.no-properties {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* =====================================
+   CLOSE DETAILS BUTTON
+===================================== */
+
+.close-details {
+  width: 100%;
+  padding: 11px;
+  background: #172554;
+  border: none;
+  border-radius: 7px;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.close-details:hover {
+  background: #1e40af;
+}
+
+/* =====================================
+   SCROLLBAR
+===================================== */
+
+.details-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.details-panel::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.details-panel::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+/* =====================================
+   RESPONSIVE DESIGN
+===================================== */
+
+@media (max-width: 1050px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .details-panel {
+    max-height: 600px;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-header {
+    padding: 18px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 21px;
+  }
+
+  .dashboard-layout {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .graph-section,
+  .details-panel {
+    padding: 14px;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-instructions {
+    gap: 8px;
+  }
+
+  .graph-container {
+    min-height: 400px;
+  }
+}
