@@ -8,6 +8,7 @@ interface GraphNode {
   id: string;
   name: string;
   group: string;
+  properties?: Record<string, any>;
   [key: string]: any;
 }
 
@@ -68,21 +69,29 @@ function normalizeGraphData(data: any): GraphData {
       properties.id
     );
 
+    const name =
+      node.name ??
+      node.title ??
+      properties.name ??
+      properties.industry_name ??
+      properties.supplier_name ??
+      properties.factory_name ??
+      properties.port_name ??
+      properties.product_name ??
+      properties.risk_name ??
+      id;
+
     return {
       ...properties,
       ...node,
       id,
-      name:
-        node.name ??
-        node.title ??
-        properties.name ??
-        properties.title ??
-        id,
+      name,
       group:
         node.group ??
         node.type ??
         labels[0] ??
-        "Other"
+        "Other",
+      properties
     };
   });
 
@@ -119,6 +128,69 @@ function normalizeGraphData(data: any): GraphData {
   return { nodes, links };
 }
 
+// Convert field names into readable labels
+function formatLabel(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+// Convert property values into readable text
+function formatValue(value: any): string {
+  if (value === null || value === undefined) {
+    return "N/A";
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => formatValue(item)).join(", ");
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
+}
+
+// Extract business properties and hide technical metadata
+function getDisplayProperties(node: GraphNode) {
+  const technicalFields = [
+    "id",
+    "elementId",
+    "identity",
+    "labels",
+    "label",
+    "properties",
+    "name",
+    "title",
+    "group",
+    "type",
+    "color",
+    "__indexColor",
+    "x",
+    "y",
+    "vx",
+    "vy",
+    "fx",
+    "fy",
+    "index"
+  ];
+
+  const combinedProperties = {
+    ...(node.properties ?? {}),
+    ...node
+  };
+
+  return Object.entries(combinedProperties).filter(
+    ([key, value]) =>
+      !technicalFields.includes(key) &&
+      value !== undefined &&
+      value !== null &&
+      typeof value !== "function"
+  );
+}
+
 function App() {
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
@@ -140,6 +212,7 @@ function App() {
         setError("");
 
         const response = await getGraphData();
+
         console.log("API Response:", response);
 
         const normalizedData =
@@ -148,7 +221,6 @@ function App() {
         if (isMounted) {
           setGraphData(normalizedData);
         }
-
       } catch (err) {
         console.error("Graph fetching error:", err);
 
@@ -159,7 +231,6 @@ function App() {
               : "Failed to fetch graph data."
           );
         }
-
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -174,50 +245,60 @@ function App() {
     };
   }, []);
 
-  // Called whenever a graph node is clicked
   const handleNodeClick = (node: any) => {
     setSelectedNode(node as GraphNode);
     console.log("Selected node:", node);
   };
 
-  // Close details when clicking the graph background
   const handleBackgroundClick = () => {
     setSelectedNode(null);
   };
 
-  const formatValue = (value: any) => {
-    if (value === null || value === undefined) {
-      return "N/A";
-    }
-
-    if (typeof value === "object") {
-      return JSON.stringify(value);
-    }
-
-    return String(value);
-  };
+  const displayProperties = selectedNode
+    ? getDisplayProperties(selectedNode)
+    : [];
 
   return (
     <div className="app-container">
 
       <header className="dashboard-header">
-        <h1>Supply Chain Dashboard</h1>
-        <p>Global Supply Chain Network Monitoring</p>
+        <div>
+          <h1>Supply Chain Dashboard</h1>
+          <p>Global Supply Chain Network Monitoring</p>
+        </div>
+
+        <div className="connection-status">
+          <span className="status-dot"></span>
+          Neo4j Graph Connected
+        </div>
       </header>
 
       <div className="dashboard-layout">
 
         <main className="graph-section">
 
-          <h2>Supply Chain Network Graph</h2>
+          <div className="section-heading">
+            <div>
+              <h2>Supply Chain Network Graph</h2>
+              <p>Explore connected supply chain entities</p>
+            </div>
+
+            <div className="graph-counts">
+              <span>{graphData.nodes.length} Nodes</span>
+              <span>{graphData.links.length} Relationships</span>
+            </div>
+          </div>
 
           <div className="graph-instructions">
-            Scroll to zoom | Drag background to pan |
-            Click a node to view details
+            <span>Scroll to zoom</span>
+            <span>Drag background to pan</span>
+            <span>Click a node for details</span>
           </div>
 
           {loading && (
-            <p>Loading graph from Neo4j...</p>
+            <p className="graph-message">
+              Loading graph from Neo4j...
+            </p>
           )}
 
           {error && (
@@ -226,7 +307,9 @@ function App() {
 
           {!loading && !error &&
             graphData.nodes.length === 0 && (
-              <p>No graph nodes were returned.</p>
+              <p className="graph-message">
+                No graph nodes were returned.
+              </p>
           )}
 
           {!loading && !error &&
@@ -240,22 +323,18 @@ function App() {
                 height={550}
                 backgroundColor="#FFFFFF"
 
-                // Zoom and pan
                 enableZoomInteraction={true}
                 enablePanInteraction={true}
                 minZoom={0.3}
                 maxZoom={8}
 
-                // Node appearance
                 nodeAutoColorBy="group"
                 nodeLabel="name"
 
-                // Relationship appearance
                 linkLabel="label"
                 linkDirectionalArrowLength={5}
                 linkDirectionalArrowRelPos={1}
 
-                // Click interaction
                 onNodeClick={handleNodeClick}
                 onBackgroundClick={handleBackgroundClick}
               />
@@ -263,57 +342,102 @@ function App() {
             </div>
           )}
 
+          <div className="graph-footer">
+            <span>Data source: FastAPI / Neo4j</span>
+            <span>Interactive network visualization</span>
+          </div>
+
         </main>
 
         <aside className="details-panel">
 
-          <h2>Entity Details</h2>
+          <div className="details-header">
+            <div>
+              <h2>Entity Details</h2>
+              <p>Selected network entity</p>
+            </div>
+
+            {selectedNode && (
+              <button
+                className="close-icon"
+                onClick={() => setSelectedNode(null)}
+                aria-label="Close entity details"
+              >
+                ×
+              </button>
+            )}
+          </div>
 
           {!selectedNode && (
             <div className="empty-details">
-              <p>Select a node in the graph to view its details.</p>
+              <div className="empty-icon">◉</div>
+              <h3>No Entity Selected</h3>
+              <p>
+                Select a supplier, factory, port,
+                product or risk node in the graph
+                to view its information.
+              </p>
             </div>
           )}
 
           {selectedNode && (
-            <div className="node-details">
+            <div className="entity-profile">
 
-              <div className="node-heading">
+              <div className="entity-title-card">
+
+                <div className="entity-avatar">
+                  ◈
+                </div>
+
                 <h3>{selectedNode.name}</h3>
 
-                <span className="node-type">
+                <span className="entity-badge">
                   {selectedNode.group}
                 </span>
+
               </div>
 
-              <div className="detail-list">
+              <div className="details-section">
 
-                {Object.entries(selectedNode)
-                  .filter(([key, value]) =>
-                    ![
-                      "__indexColor",
-                      "x",
-                      "y",
-                      "vx",
-                      "vy",
-                      "fx",
-                      "fy",
-                      "index"
-                    ].includes(key) &&
-                    value !== undefined &&
-                    typeof value !== "function"
-                  )
-                  .map(([key, value]) => (
-                    <div className="detail-item" key={key}>
-                      <span className="detail-label">
-                        {key}
-                      </span>
+                <h4>Entity Information</h4>
 
-                      <span className="detail-value">
-                        {formatValue(value)}
-                      </span>
-                    </div>
-                  ))}
+                <div className="details-grid">
+
+                  {displayProperties.length > 0 ? (
+                    displayProperties.map(([key, value]) => (
+                      <div className="detail-card" key={key}>
+
+                        <span className="detail-label">
+                          {formatLabel(key)}
+                        </span>
+
+                        <span className="detail-value">
+                          {formatValue(value)}
+                        </span>
+
+                      </div>
+                    ))
+                  ) : (
+                    <p className="no-properties">
+                      No additional properties available.
+                    </p>
+                  )}
+
+                </div>
+
+              </div>
+
+              <div className="details-section">
+
+                <h4>Entity Identifier</h4>
+
+                <div className="identifier-card">
+                  <span className="detail-label">
+                    Node ID
+                  </span>
+
+                  <strong>{selectedNode.id}</strong>
+                </div>
 
               </div>
 
