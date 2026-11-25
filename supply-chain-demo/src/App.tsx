@@ -1,144 +1,246 @@
 
-import { useState } from "react";
-import ForceGraph2D  from "react-force-graph-2d";
-import { type NodeObject } from "force-graph";
+import { useState, useEffect } from "react";
+import ForceGraph2D from "react-force-graph-2d";
 import "./App.css";
+import { getGraphData } from "./api";
 
-type CustomNode = NodeObject & {
+// Graph node structure
+interface GraphNode {
+  id: string;
   name: string;
-  group: string | number;
-};
+  group: string;
+  [key: string]: any;
+}
 
-const graphData = {
-  nodes: [
-    { id: "S1", name: "Supplier A", group: "Supplier" },
-    { id: "S2", name: "Supplier B", group: "Supplier" },
-    { id: "F1", name: "Factory A", group: "Factory" },
-    { id: "F2", name: "Factory B", group: "Factory" },
-    { id: "P1", name: "Product A", group: "Product" },
-    { id: "P2", name: "Product B", group: "Product" },
-    { id: "PT1", name: "Port A", group: "Port" },
-    { id: "R1", name: "Port Congestion", group: "Risk" }
-  ],
+// Graph relationship structure
+interface GraphLink {
+  source: string;
+  target: string;
+  label: string;
+  [key: string]: any;
+}
 
-  links: [
-    { source: "S1", target: "F1", label: "SUPPLIES_TO" },
-    { source: "S2", target: "F2", label: "SUPPLIES_TO" },
-    { source: "F1", target: "P1", label: "PRODUCES" },
-    { source: "F2", target: "P2", label: "PRODUCES" },
-    { source: "P1", target: "PT1", label: "SHIPS_THROUGH" },
-    { source: "PT1", target: "R1", label: "HAS_RISK" }
-  ]
-};
+interface GraphData {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
+// Get an ID from a string, number, or Neo4j-style object
+function getId(value: any): string {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "object") {
+    return String(
+      value.id ??
+      value.elementId ??
+      value.identity ??
+      ""
+    );
+  }
+
+  return String(value);
+}
+
+// Convert the backend response into ForceGraph format
+function normalizeGraphData(data: any): GraphData {
+  // Handle common response wrappers
+  const response = data?.data ?? data?.graph ?? data;
+
+  if (!response || typeof response !== "object") {
+    throw new Error("Invalid graph response from FastAPI.");
+  }
+
+  const rawNodes = response.nodes;
+
+  const rawLinks =
+    response.links ??
+    response.relationships ??
+    response.edges ??
+    response.rels ??
+    [];
+
+  if (!Array.isArray(rawNodes)) {
+    throw new Error(
+      "The API response does not contain a nodes array."
+    );
+  }
+
+  if (!Array.isArray(rawLinks)) {
+    throw new Error(
+      "The API relationships are not in a valid array format."
+    );
+  }
+
+  const nodes: GraphNode[] = rawNodes.map((node: any) => {
+    const properties = node.properties ?? {};
+
+    const id = getId(
+      node.id ??
+      node.elementId ??
+      node.identity ??
+      properties.id
+    );
+
+    const labels = node.labels ?? [];
+
+    return {
+      ...properties,
+      ...node,
+      id,
+      name:
+        node.name ??
+        node.title ??
+        properties.name ??
+        properties.title ??
+        id,
+      group:
+        node.group ??
+        node.type ??
+        labels[0] ??
+        "Other"
+    };
+  });
+
+  const links: GraphLink[] = rawLinks.map((link: any) => {
+    const properties = link.properties ?? {};
+
+    return {
+      ...properties,
+      ...link,
+
+      source: getId(
+        link.source ??
+        link.startNodeElementId ??
+        link.startNode ??
+        link.from ??
+        link.start
+      ),
+
+      target: getId(
+        link.target ??
+        link.endNodeElementId ??
+        link.endNode ??
+        link.to ??
+        link.end
+      ),
+
+      label:
+        link.label ??
+        link.type ??
+        link.relationshipType ??
+        "CONNECTED"
+    };
+  }).filter(
+    (link: GraphLink) => link.source !== "" && link.target !== ""
+  );
+
+  return { nodes, links };
+}
 
 function App() {
-  const [selectedNode, setSelectedNode] = useState<CustomNode | null>(null);
+  const [graphData, setGraphData] = useState<GraphData>({
+    nodes: [],
+    links: []
+  });
 
-  const stats = [
-    { title: "Suppliers", value: 120, color: "#3B82F6" },
-    { title: "Factories", value: 45, color: "#16A34A" },
-    { title: "Ports", value: 18, color: "#F59E0B" },
-    { title: "Risks", value: 12, color: "#EF4444" }
-  ];
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchGraphData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await getGraphData();
+
+        console.log("Complete API Response:", response);
+        console.log("Response keys:", Object.keys(response ?? {}));
+
+        const normalizedData = normalizeGraphData(response);
+
+        console.log("Normalized Nodes:", normalizedData.nodes);
+        console.log("Normalized Links:", normalizedData.links);
+
+        if (isMounted) {
+          setGraphData(normalizedData);
+        }
+
+      } catch (err) {
+        console.error("Graph fetching error:", err);
+
+        if (isMounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to fetch graph data."
+          );
+        }
+
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchGraphData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
-    <div className="dashboard">
+    <div className="app-container">
 
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <h2>SupplyChain</h2>
-        <p className="menu-title">MAIN MENU</p>
-        <div className="menu active">Dashboard</div>
-        <div className="menu">Network Graph</div>
-        <div className="menu">Suppliers</div>
-        <div className="menu">Factories</div>
-        <div className="menu">Ports</div>
-        <div className="menu">Risk Analysis</div>
-      </aside>
+      <h1>Supply Chain Dashboard</h1>
 
-      {/* Main content */}
-      <main className="main-content">
+      <section className="graph-section">
 
-        <header className="topbar">
-          <h2>Global Supply Chain Dashboard</h2>
-          <span className="demo-label">DEMO VERSION</span>
-        </header>
+        <h2>Supply Chain Network Graph</h2>
 
-        <section className="welcome">
-          <h1>Network Overview</h1>
-          <p>
-            Monitor your global supply chain entities
-            and relationships.
-          </p>
-        </section>
-
-        {/* Statistics */}
-        <section className="stats">
-          {stats.map((item) => (
-            <div className="stat-card" key={item.title}>
-              <h3>{item.title}</h3>
-              <h1 style={{ color: item.color }}>
-                {item.value}
-              </h1>
-            </div>
-          ))}
-        </section>
-
-        {/* Graph */}
-        <section className="graph-section">
-          <h2>Supply Chain Network Graph</h2>
-
-          <div className="graph-container">
-            <ForceGraph2D
-              graphData={graphData}
-              width={850}
-              height={480}
-              backgroundColor="#FFFFFF"
-              nodeAutoColorBy="group"
-              nodeLabel={(node: NodeObject) => {
-                const n = node as CustomNode;
-                return `${n.name} (${n.group})`
-              }}
-              linkLabel="label"
-              linkDirectionalArrowLength={5}
-              linkDirectionalArrowRelPos={1}
-              onNodeClick={(node) =>
-                setSelectedNode(node as CustomNode)}
-              
-            />
-          </div>
-        </section>
-
-        {/* Selected node */}
-        {selectedNode && (
-          <section className="details">
-            <h3>Selected Entity</h3>
-            <p>Name: {selectedNode.name}</p>
-            <p>Type: {selectedNode.group}</p>
-            <button onClick={() => setSelectedNode(null)}>
-              Close
-            </button>
-          </section>
+        {loading && (
+          <p>Loading graph from Neo4j...</p>
         )}
 
-        {/* Risk overview */}
-        <section className="risk-section">
-          <h2>Risk Overview</h2>
-          <div className="risk-item">
-            <span>Port Congestion</span>
-            <strong className="high">HIGH</strong>
-          </div>
-          <div className="risk-item">
-            <span>Weather Disruption</span>
-            <strong className="medium">MEDIUM</strong>
-          </div>
-          <div className="risk-item">
-            <span>Supplier Delay</span>
-            <strong className="low">LOW</strong>
-          </div>
-        </section>
+        {error && (
+          <p className="error-message">{error}</p>
+        )}
 
-      </main>
+        {!loading && !error && graphData.nodes.length === 0 && (
+          <p>No nodes were returned by the API.</p>
+        )}
+
+        {!loading && !error && graphData.nodes.length > 0 && (
+          <>
+            <p>
+              Nodes: {graphData.nodes.length} |
+              Relationships: {graphData.links.length}
+            </p>
+
+            <div className="graph-container">
+
+              <ForceGraph2D
+                graphData={graphData}
+                width={850}
+                height={480}
+                backgroundColor="#FFFFFF"
+                nodeAutoColorBy="group"
+                nodeLabel="name"
+                linkLabel="label"
+                linkDirectionalArrowLength={5}
+                linkDirectionalArrowRelPos={1}
+              />
+
+            </div>
+          </>
+        )}
+
+      </section>
+
     </div>
   );
 }
