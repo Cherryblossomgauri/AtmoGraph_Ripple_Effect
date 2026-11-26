@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import "./App.css";
 import { getGraphData } from "./api";
@@ -30,9 +29,9 @@ function getId(value: any): string {
   if (typeof value === "object") {
     return String(
       value.id ??
-      value.elementId ??
-      value.identity ??
-      ""
+        value.elementId ??
+        value.identity ??
+        ""
     );
   }
 
@@ -60,13 +59,13 @@ function normalizeGraphData(data: any): GraphData {
 
   const nodes: GraphNode[] = rawNodes.map((node: any) => {
     const properties = node.properties ?? {};
-    const labels = node.labels ?? [];
+    const labels = Array.isArray(node.labels) ? node.labels : [];
 
     const id = getId(
       node.id ??
-      node.elementId ??
-      node.identity ??
-      properties.id
+        node.elementId ??
+        node.identity ??
+        properties.id
     );
 
     const name =
@@ -85,65 +84,66 @@ function normalizeGraphData(data: any): GraphData {
       ...properties,
       ...node,
       id,
-      name,
-      group:
+      name: String(name || id || "Unnamed entity"),
+      group: String(
         node.group ??
-        node.type ??
-        labels[0] ??
-        "Other",
-      properties
+          node.type ??
+          labels[0] ??
+          "Other"
+      ),
+      properties,
     };
   });
 
-  const links: GraphLink[] = rawLinks.map((link: any) => {
-    const properties = link.properties ?? {};
+  const links: GraphLink[] = rawLinks
+    .map((link: any) => {
+      const properties = link.properties ?? {};
 
-    return {
-      ...properties,
-      ...link,
-      source: getId(
-        link.source ??
-        link.startNodeElementId ??
-        link.startNode ??
-        link.from ??
-        link.start
-      ),
-      target: getId(
-        link.target ??
-        link.endNodeElementId ??
-        link.endNode ??
-        link.to ??
-        link.end
-      ),
-      label:
-        link.label ??
-        link.type ??
-        link.relationshipType ??
-        "CONNECTED"
-    };
-  }).filter(
-    link => link.source !== "" && link.target !== ""
-  );
+      return {
+        ...properties,
+        ...link,
+        source: getId(
+          link.source ??
+            link.startNodeElementId ??
+            link.startNode ??
+            link.from ??
+            link.start
+        ),
+        target: getId(
+          link.target ??
+            link.endNodeElementId ??
+            link.endNode ??
+            link.to ??
+            link.end
+        ),
+        label: String(
+          link.label ??
+            link.type ??
+            link.relationshipType ??
+            "CONNECTED"
+        ),
+      };
+    })
+    .filter(
+      (link: GraphLink) =>
+        link.source !== "" && link.target !== ""
+    );
 
   return { nodes, links };
 }
 
-// Convert field names into readable labels
 function formatLabel(key: string): string {
   return key
     .replace(/_/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\b\w/g, char => char.toUpperCase());
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-// Convert property values into readable text
 function formatValue(value: any): string {
-  if (value === null || value === undefined) {
-    return "N/A";
-  }
+  if (value === null || value === undefined) return "N/A";
 
   if (Array.isArray(value)) {
-    return value.map(item => formatValue(item)).join(", ");
+    return value.map((item) => formatValue(item)).join(", ");
   }
 
   if (typeof value === "object") {
@@ -153,7 +153,6 @@ function formatValue(value: any): string {
   return String(value);
 }
 
-// Extract business properties and hide technical metadata
 function getDisplayProperties(node: GraphNode) {
   const technicalFields = [
     "id",
@@ -174,12 +173,14 @@ function getDisplayProperties(node: GraphNode) {
     "vy",
     "fx",
     "fy",
-    "index"
+    "index",
+    "source",
+    "target",
   ];
 
   const combinedProperties = {
     ...(node.properties ?? {}),
-    ...node
+    ...node,
   };
 
   return Object.entries(combinedProperties).filter(
@@ -193,17 +194,33 @@ function getDisplayProperties(node: GraphNode) {
 
 function App() {
   const graphRef = useRef<any>(null);
+  const graphContainerRef = useRef<HTMLDivElement>(null);
+
+  const [graphWidth, setGraphWidth] = useState(1000);
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
-    links: []
+    links: [],
   });
-
   const [selectedNode, setSelectedNode] =
     useState<GraphNode | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Measure the available graph area so the graph uses the full page width.
+  useEffect(() => {
+    const container = graphContainerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) setGraphWidth(Math.floor(width));
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // Fetch the graph from your existing FastAPI endpoint.
   useEffect(() => {
     let isMounted = true;
 
@@ -213,11 +230,9 @@ function App() {
         setError("");
 
         const response = await getGraphData();
-
         console.log("API Response:", response);
 
-        const normalizedData =
-          normalizeGraphData(response);
+        const normalizedData = normalizeGraphData(response);
 
         if (isMounted) {
           setGraphData(normalizedData);
@@ -233,9 +248,7 @@ function App() {
           );
         }
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -248,11 +261,28 @@ function App() {
 
   const handleNodeClick = (node: any) => {
     setSelectedNode(node as GraphNode);
-    console.log("Selected node:", node);
   };
 
   const handleBackgroundClick = () => {
     setSelectedNode(null);
+  };
+
+  const zoomIn = () => {
+    const currentZoom = graphRef.current?.zoom();
+    if (typeof currentZoom === "number") {
+      graphRef.current.zoom(Math.min(8, currentZoom * 1.5), 250);
+    }
+  };
+
+  const zoomOut = () => {
+    const currentZoom = graphRef.current?.zoom();
+    if (typeof currentZoom === "number") {
+      graphRef.current.zoom(Math.max(0.3, currentZoom / 1.5), 250);
+    }
+  };
+
+  const fitGraph = () => {
+    graphRef.current?.zoomToFit(400, 60);
   };
 
   const displayProperties = selectedNode
@@ -261,256 +291,219 @@ function App() {
 
   return (
     <div className="app-container">
-
       <header className="dashboard-header">
         <div>
           <h1>Supply Chain Dashboard</h1>
           <p>Global Supply Chain Network Monitoring</p>
         </div>
 
-        <div className="connection-status">
-          <span className="status-dot"></span>
-          Neo4j Graph Connected
+        <div className={`connection-status ${error ? "connection-error" : ""}`}>
+          <span className="status-dot" />
+          {loading
+            ? "Connecting to graph..."
+            : error
+              ? "Graph connection failed"
+              : "Graph data loaded"}
         </div>
       </header>
 
-      <div className="dashboard-layout">
+      <main className="network-page">
+        <section className="network-header">
+          <div>
+            <h2>Supply Chain Network</h2>
+            <p>
+              Explore your Neo4j entities and their relationships.
+              Select a node to view its details.
+            </p>
+          </div>
 
-        <main className="graph-section">
-
-          <div className="section-heading">
-            <div>
-              <h2>Supply Chain Network Graph</h2>
-              <p>Explore connected supply chain entities</p>
-            </div>
-
+          <div className="network-actions">
             <div className="graph-counts">
               <span>{graphData.nodes.length} Nodes</span>
               <span>{graphData.links.length} Relationships</span>
             </div>
-          </div>
 
-          <div className="graph-instructions">
-            <span>Scroll to zoom</span>
-            <span>Drag background to pan</span>
-            <span>Click a node for details</span>
+            <button
+              className="fit-graph-button"
+              onClick={fitGraph}
+              disabled={graphData.nodes.length === 0}
+            >
+              Fit Graph
+            </button>
+          </div>
+        </section>
+
+        <section className="graph-card">
+          <div className="graph-toolbar">
+            <div className="graph-instructions">
+              <span>Scroll to zoom</span>
+              <span>Drag background to pan</span>
+              <span>Click a node for details</span>
+            </div>
+
+            <div className="graph-legend">
+              <span><i className="legend-dot supplier-dot" /> Entities</span>
+              <span><i className="legend-dot risk-dot" /> Risks</span>
+              <span><i className="legend-dot route-dot" /> Routes</span>
+            </div>
           </div>
 
           {loading && (
-            <p className="graph-message">
+            <div className="graph-message">
               Loading graph from Neo4j...
-            </p>
+            </div>
           )}
 
           {error && (
-            <p className="error-message">{error}</p>
-          )}
-
-          {!loading && !error &&
-            graphData.nodes.length === 0 && (
-              <p className="graph-message">
-                No graph nodes were returned.
-              </p>
-          )}
-
-          {!loading && !error &&
-            graphData.nodes.length > 0 && (
-
-            <div className="graph-container">
-              <div className="zoom-controls">
-
-  {/* Zoom In */}
-  <button
-    onClick={() => {
-      const currentZoom = graphRef.current?.zoom();
-      graphRef.current?.zoom(currentZoom * 1.5, 300);
-    }}
-    title="Zoom In"
-  >
-    +
-  </button>
-
-  {/* Zoom Out */}
-  <button
-    onClick={() => {
-      const currentZoom = graphRef.current?.zoom();
-      graphRef.current?.zoom(currentZoom / 1.5, 300);
-    }}
-    title="Zoom Out"
-  >
-    −
-  </button>
-
-  {/* Fit Graph */}
-  <button
-    onClick={() => graphRef.current?.zoomToFit(400, 50)}
-    title="Fit Graph"
-  >
-    Fit Graph
-  </button>
-
-</div>
-<ForceGraph2D
-  ref={graphRef}
-  graphData={graphData}
-  width={850}
-  height={550}
-  backgroundColor="#FFFFFF"
-
-  enableZoomInteraction={true}
-  enablePanInteraction={true}
-  minZoom={0.3}
-  maxZoom={8}
-
-  nodeAutoColorBy="group"
-
-  // Permanently display node labels
-  nodeCanvasObject={(node: any, ctx, globalScale) => {
-    const label = node.name || node.id;
-
-    // Draw node circle
-    const radius = 5;
-    ctx.beginPath();
-    ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI);
-    ctx.fillStyle = node.color || "#2563eb";
-    ctx.fill();
-
-    // Display label
-    const fontSize = Math.max(2, 11 / globalScale);
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#111827";
-
-    ctx.fillText(label, node.x! + 8, node.y!);
-  }}
-
-  linkLabel="label"
-  linkDirectionalArrowLength={5}
-  linkDirectionalArrowRelPos={1}
-
-  onNodeClick={handleNodeClick}
-  onBackgroundClick={handleBackgroundClick}
-/>
-
-              
-
+            <div className="error-message">
+              {error}
             </div>
           )}
 
-          <div className="graph-footer">
+          {!loading && !error && graphData.nodes.length === 0 && (
+            <div className="graph-message">
+              No graph nodes were returned by the API.
+            </div>
+          )}
+
+          {!loading && !error && graphData.nodes.length > 0 && (
+            <div className="graph-container" ref={graphContainerRef}>
+              <ForceGraph2D
+                ref={graphRef}
+                graphData={graphData}
+                width={Math.max(300, graphWidth)}
+                height={680}
+                backgroundColor="#ffffff"
+                enableZoomInteraction={true}
+                enablePanInteraction={true}
+                minZoom={0.3}
+                maxZoom={8}
+                nodeAutoColorBy="group"
+                nodeLabel="name"
+                nodeCanvasObjectMode={() => "replace"}
+                nodeCanvasObject={(node: any, ctx, globalScale) => {
+                  const x = node.x ?? 0;
+                  const y = node.y ?? 0;
+                  const radius = 5;
+
+                  // Draw the colored node.
+                  ctx.beginPath();
+                  ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                  ctx.fillStyle = node.color || "#287db5";
+                  ctx.fill();
+
+                  // Show permanent labels only when zoomed in.
+                  // Hovering still shows the nodeLabel tooltip at any zoom.
+                  if (globalScale >= 1.35) {
+                    const label = String(node.name || node.id || "");
+                    const fontSize = Math.max(3, 11 / globalScale);
+
+                    ctx.font = `600 ${fontSize}px Arial`;
+                    ctx.textAlign = "left";
+                    ctx.textBaseline = "middle";
+                    ctx.fillStyle = "#172033";
+                    ctx.fillText(label, x + radius + 4, y);
+                  }
+                }}
+                linkLabel="label"
+                linkDirectionalArrowLength={4}
+                linkDirectionalArrowRelPos={1}
+                onNodeClick={handleNodeClick}
+                onBackgroundClick={handleBackgroundClick}
+              />
+
+              <div className="zoom-controls">
+                <button onClick={zoomIn} title="Zoom in" aria-label="Zoom in">
+                  +
+                </button>
+                <button onClick={zoomOut} title="Zoom out" aria-label="Zoom out">
+                  −
+                </button>
+                <button onClick={fitGraph} title="Fit graph">
+                  Fit
+                </button>
+              </div>
+            </div>
+          )}
+
+          <footer className="graph-footer">
             <span>Data source: FastAPI / Neo4j</span>
             <span>Interactive network visualization</span>
-          </div>
+          </footer>
+        </section>
+      </main>
 
-        </main>
+      {/* The details drawer overlays the graph; it does not reduce graph width. */}
+      {selectedNode && (
+        <div className="details-overlay">
+          <aside
+            className="details-panel"
+            aria-label="Selected entity details"
+          >
+            <div className="details-header">
+              <div>
+                <h2>Entity Details</h2>
+                <p>Selected network entity</p>
+              </div>
 
-        <aside className="details-panel">
-
-          <div className="details-header">
-            <div>
-              <h2>Entity Details</h2>
-              <p>Selected network entity</p>
-            </div>
-
-            {selectedNode && (
               <button
                 className="close-icon"
                 onClick={() => setSelectedNode(null)}
                 aria-label="Close entity details"
+                title="Close"
               >
                 ×
               </button>
-            )}
-          </div>
-
-          {!selectedNode && (
-            <div className="empty-details">
-              <div className="empty-icon">◉</div>
-              <h3>No Entity Selected</h3>
-              <p>
-                Select a supplier, factory, port,
-                product or risk node in the graph
-                to view its information.
-              </p>
             </div>
-          )}
 
-          {selectedNode && (
-            <div className="entity-profile">
-
-              <div className="entity-title-card">
-
-                <div className="entity-avatar">
-                  ◈
-                </div>
-
-                <h3>{selectedNode.name}</h3>
-
-                <span className="entity-badge">
-                  {selectedNode.group}
-                </span>
-
-              </div>
-
-              <div className="details-section">
-
-                <h4>Entity Information</h4>
-
-                <div className="details-grid">
-
-                  {displayProperties.length > 0 ? (
-                    displayProperties.map(([key, value]) => (
-                      <div className="detail-card" key={key}>
-
-                        <span className="detail-label">
-                          {formatLabel(key)}
-                        </span>
-
-                        <span className="detail-value">
-                          {formatValue(value)}
-                        </span>
-
-                      </div>
-                    ))
-                  ) : (
-                    <p className="no-properties">
-                      No additional properties available.
-                    </p>
-                  )}
-
-                </div>
-
-              </div>
-
-              <div className="details-section">
-
-                <h4>Entity Identifier</h4>
-
-                <div className="identifier-card">
-                  <span className="detail-label">
-                    Node ID
-                  </span>
-
-                  <strong>{selectedNode.id}</strong>
-                </div>
-
-              </div>
-
-              <button
-                className="close-details"
-                onClick={() => setSelectedNode(null)}
-              >
-                Close Details
-              </button>
-
+            <div className="entity-title-card">
+              <div className="entity-avatar">◈</div>
+              <h3>{selectedNode.name || selectedNode.id}</h3>
+              <span className="entity-badge">
+                {selectedNode.group || "Entity"}
+              </span>
             </div>
-          )}
 
-        </aside>
+            <section className="details-section">
+              <h4>Entity Information</h4>
 
-      </div>
+              <div className="details-grid">
+                {displayProperties.length > 0 ? (
+                  displayProperties.map(([key, value]) => (
+                    <div className="detail-card" key={key}>
+                      <span className="detail-label">
+                        {formatLabel(key)}
+                      </span>
+                      <span className="detail-value">
+                        {formatValue(value)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="no-properties">
+                    No additional properties are available for this entity.
+                  </p>
+                )}
+              </div>
+            </section>
 
+            <section className="details-section">
+              <h4>Entity Identifier</h4>
+              <div className="identifier-card">
+                <span className="detail-label">Node ID</span>
+                <strong>{selectedNode.id}</strong>
+              </div>
+            </section>
+
+            <button
+              className="close-details-button"
+              onClick={() => setSelectedNode(null)}
+            >
+              Close Details
+            </button>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
