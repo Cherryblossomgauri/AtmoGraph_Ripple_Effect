@@ -350,28 +350,50 @@ function App() {
   </button>
 
 </div>
-              <ForceGraph2D
-                ref={graphRef}
-                graphData={graphData}
-                width={850}
-                height={550}
-                backgroundColor="#FFFFFF"
+<ForceGraph2D
+  ref={graphRef}
+  graphData={graphData}
+  width={850}
+  height={550}
+  backgroundColor="#FFFFFF"
 
-                enableZoomInteraction={true}
-                enablePanInteraction={true}
-                minZoom={0.3}
-                maxZoom={8}
+  enableZoomInteraction={true}
+  enablePanInteraction={true}
+  minZoom={0.3}
+  maxZoom={8}
 
-                nodeAutoColorBy="group"
-                nodeLabel="name"
+  nodeAutoColorBy="group"
 
-                linkLabel="label"
-                linkDirectionalArrowLength={5}
-                linkDirectionalArrowRelPos={1}
+  // Permanently display node labels
+  nodeCanvasObject={(node: any, ctx, globalScale) => {
+    const label = node.name || node.id;
 
-                onNodeClick={handleNodeClick}
-                onBackgroundClick={handleBackgroundClick}
-              />
+    // Draw node circle
+    const radius = 5;
+    ctx.beginPath();
+    ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = node.color || "#2563eb";
+    ctx.fill();
+
+    // Display label
+    const fontSize = Math.max(2, 11 / globalScale);
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#111827";
+
+    ctx.fillText(label, node.x! + 8, node.y!);
+  }}
+
+  linkLabel="label"
+  linkDirectionalArrowLength={5}
+  linkDirectionalArrowRelPos={1}
+
+  onNodeClick={handleNodeClick}
+  onBackgroundClick={handleBackgroundClick}
+/>
+
+              
 
             </div>
           )}
