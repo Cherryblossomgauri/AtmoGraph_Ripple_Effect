@@ -435,4 +435,32 @@ button {
   .graph-container {
     min-height: 400px;
   }
+
+  .zoom-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  justify-content: flex-end;
+}
+
+.zoom-controls button {
+  min-width: 42px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #172554;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.zoom-controls button:hover {
+  background: #2563eb;
+}
+
+.zoom-controls button:last-child {
+  font-size: 12px;
+}
 }

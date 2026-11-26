@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import "./App.css";
 import { getGraphData } from "./api";
@@ -192,6 +192,7 @@ function getDisplayProperties(node: GraphNode) {
 }
 
 function App() {
+  const graphRef = useRef<any>(null);
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
     links: []
@@ -316,8 +317,41 @@ function App() {
             graphData.nodes.length > 0 && (
 
             <div className="graph-container">
+              <div className="zoom-controls">
 
+  {/* Zoom In */}
+  <button
+    onClick={() => {
+      const currentZoom = graphRef.current?.zoom();
+      graphRef.current?.zoom(currentZoom * 1.5, 300);
+    }}
+    title="Zoom In"
+  >
+    +
+  </button>
+
+  {/* Zoom Out */}
+  <button
+    onClick={() => {
+      const currentZoom = graphRef.current?.zoom();
+      graphRef.current?.zoom(currentZoom / 1.5, 300);
+    }}
+    title="Zoom Out"
+  >
+    −
+  </button>
+
+  {/* Fit Graph */}
+  <button
+    onClick={() => graphRef.current?.zoomToFit(400, 50)}
+    title="Fit Graph"
+  >
+    Fit Graph
+  </button>
+
+</div>
               <ForceGraph2D
+                ref={graphRef}
                 graphData={graphData}
                 width={850}
                 height={550}
