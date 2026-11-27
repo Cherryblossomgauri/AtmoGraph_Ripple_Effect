@@ -9,6 +9,7 @@ from neo4j.time import Date, DateTime, Time, Duration
 
 from database import DATABASE as NEO4J_DATABASE
 from database import close_connection, get_database_session
+from NLP.router import router as nlp_router
 
 
 @asynccontextmanager
@@ -24,6 +25,7 @@ app = FastAPI(
     version="1.2.0",
     lifespan=lifespan,
 )
+app.include_router(nlp_router)
 
 
 # During local development, React usually runs on localhost:5173 (Vite).
